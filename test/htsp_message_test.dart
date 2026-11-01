@@ -6,7 +6,7 @@ import 'package:mawjtvh/data/htsp_message.dart';
 void main() {
   test('encodes the documented hello frame', () {
     final bytes = Htsmsg.encode(<String, Object?>{'seq': 1});
-    // length 11 | type S64, name length 3, data length 1 | "seq" | 0x01
+    // length 10 | type S64, name length 3, data length 1 | "seq" | 0x01
     expect(
       bytes,
       Uint8List.fromList(<int>[
