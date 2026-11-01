@@ -19,6 +19,11 @@ extension TvhStrings on AppStrings {
   String get streamProfileHelp => isArabic
       ? 'اتركه فارغًا للبث الأصلي (pass). اختر ملف تحويل إن كانت الشبكة بطيئة.'
       : 'Leave empty for the original stream (pass). Pick a transcoding profile on a slow network.';
+  String get useHtsp => isArabic ? 'بروتوكول HTSP الأصلي' : 'Native HTSP protocol';
+  String get useHtspHelp => isArabic
+      ? 'تحديثات فورية للقنوات والدليل والتسجيلات دون استعلام متكرر. يتطلب فتح منفذ HTSP على الخادم وصلاحية HTSP للحساب.'
+      : 'Live updates of channels, guide and recordings with no polling. Needs the server\'s HTSP port open and HTSP access on the account.';
+  String get htspPort => isArabic ? 'منفذ HTSP' : 'HTSP port';
   String get serverNameHint => isArabic ? 'خادم المنزل' : 'Home server';
   String get showPassword => isArabic ? 'إظهار كلمة المرور' : 'Show password';
   String get hidePassword => isArabic ? 'إخفاء كلمة المرور' : 'Hide password';

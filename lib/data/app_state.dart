@@ -9,6 +9,8 @@ import '../core/catppuccin.dart';
 import '../core/text.dart';
 import 'models.dart';
 import 'storage.dart';
+import 'htsp_backend.dart';
+import 'htsp_connection.dart';
 import 'tvh_client.dart';
 import 'tvh_loader.dart';
 import 'tvh_models.dart';
@@ -155,6 +157,7 @@ class AppState extends ChangeNotifier {
   Future<void> load() async {
     final source = activeSource;
     if (source == null) {
+      _detachHtsp();
       _content = null;
       _recordings = const <TvhRecording>[];
       _warnings = <LoadWarning>{};
@@ -175,9 +178,12 @@ class AppState extends ChangeNotifier {
         guideHours: _settings.guideHours,
       );
       if (generation != _loadGeneration) {
+        unawaited(content.htsp?.close());
         return;
       }
+      _detachHtsp();
       _content = content;
+      _attachHtsp(content.htsp);
       _indexChannels(content.playlist.channels);
       _warnings = content.warnings;
       _lastErrorMessage = null;
@@ -226,6 +232,76 @@ class AppState extends ChangeNotifier {
     ];
   }
 
+  // ---- HTSP session --------------------------------------------------------
+
+  HtspBackend? _htspSession;
+  StreamSubscription<void>? _htspChanges;
+  Timer? _htspRetry;
+  int _htspFailures = 0;
+
+  HtspBackend? get _htsp => _htspSession;
+
+  /// True while the native HTSP session is connected.
+  bool get usesHtsp => _htspSession != null && !_htspSession!.isClosed;
+
+  void _attachHtsp(HtspBackend? backend) {
+    _htspSession = backend;
+    if (backend == null) {
+      return;
+    }
+    _htspFailures = 0;
+    _htspChanges = backend.changes.listen((_) => _applyHtspChange(backend));
+    unawaited(
+      backend.closed.then((_) {
+        if (!identical(_htspSession, backend) || _disposed) {
+          return;
+        }
+        // Connection lost: reload (and so reconnect) with a growing delay.
+        _htspFailures += 1;
+        final seconds = (_htspFailures * 5).clamp(5, 60).toInt();
+        _htspRetry?.cancel();
+        _htspRetry = Timer(Duration(seconds: seconds), () {
+          if (!_disposed && identical(_htspSession, backend)) {
+            unawaited(load());
+          }
+        });
+        notifyListeners();
+      }),
+    );
+  }
+
+  void _detachHtsp() {
+    _htspRetry?.cancel();
+    _htspRetry = null;
+    unawaited(_htspChanges?.cancel());
+    _htspChanges = null;
+    final session = _htspSession;
+    _htspSession = null;
+    if (session != null) {
+      unawaited(session.close());
+    }
+  }
+
+  void _applyHtspChange(HtspBackend backend) {
+    final current = _content;
+    if (current == null || !identical(_htspSession, backend)) {
+      return;
+    }
+    final channels = backend.channels();
+    if (channels.isNotEmpty) {
+      _content = current.copyWith(
+        playlist: Playlist(channels: channels),
+        epg: backend.guide(),
+      );
+      _indexChannels(channels);
+    }
+    _recordings = backend.recordings();
+    _recordingsError = null;
+    notifyListeners();
+  }
+
+  bool _disposed = false;
+
   DateTime? _lastAutoRefresh;
 
   /// Reloads the playlist and guide once the chosen interval has passed, and
@@ -233,6 +309,11 @@ class AppState extends ChangeNotifier {
   void _maybeAutoRefresh() {
     final minutes = _settings.autoRefreshMinutes;
     if (minutes <= 0 || _loading || activeSource == null) {
+      return;
+    }
+    final htsp = _htsp;
+    if (htsp != null && !htsp.isClosed) {
+      // The server pushes changes; there is nothing to poll.
       return;
     }
     final last = lastLoaded;
@@ -321,6 +402,7 @@ class AppState extends ChangeNotifier {
       return;
     }
     _settings = _settings.copyWith(activeSourceId: sourceId);
+    _detachHtsp();
     _content = null;
     _recordings = const <TvhRecording>[];
     _warnings = <LoadWarning>{};
@@ -474,6 +556,13 @@ class AppState extends ChangeNotifier {
     if (activeSource == null || _recordingsLoading) {
       return;
     }
+    final htsp = _htsp;
+    if (htsp != null && !htsp.isClosed) {
+      _recordings = htsp.recordings();
+      _recordingsError = null;
+      notifyListeners();
+      return;
+    }
     _recordingsLoading = true;
     if (!quiet) {
       _recordingsError = null;
@@ -504,6 +593,13 @@ class AppState extends ChangeNotifier {
     if (id == null) {
       throw const TvhException('This programme cannot be recorded.');
     }
+    final htsp = _htsp;
+    if (htsp != null && !htsp.isClosed) {
+      await _htspAction(
+        () => series ? htsp.recordSeries(programme) : htsp.recordEvent(id),
+      );
+      return;
+    }
     await withClient((client) {
       return series ? client.recordSeries(id) : client.recordEvent(id);
     });
@@ -512,23 +608,52 @@ class AppState extends ChangeNotifier {
 
   Future<void> recordChannelNow(Channel channel, int minutes) async {
     final title = epg.nowFor(channel, DateTime.now())?.title ?? channel.name;
+    final htsp = _htsp;
+    if (htsp != null && !htsp.isClosed) {
+      await _htspAction(() => htsp.recordNow(channel.id, title, minutes));
+      return;
+    }
     await withClient((client) => client.recordNow(channel.id, title, minutes));
     await _afterRecordingChange();
   }
 
   Future<void> stopRecording(TvhRecording recording) async {
+    final htsp = _htsp;
+    if (htsp != null && !htsp.isClosed) {
+      await _htspAction(() => htsp.stopRecording(recording.uuid));
+      return;
+    }
     await withClient((client) => client.stopRecording(recording.uuid));
     await _afterRecordingChange();
   }
 
   Future<void> cancelRecording(TvhRecording recording) async {
+    final htsp = _htsp;
+    if (htsp != null && !htsp.isClosed) {
+      await _htspAction(() => htsp.cancelRecording(recording.uuid));
+      return;
+    }
     await withClient((client) => client.cancelRecording(recording.uuid));
     await _afterRecordingChange();
   }
 
   Future<void> removeRecording(TvhRecording recording) async {
+    final htsp = _htsp;
+    if (htsp != null && !htsp.isClosed) {
+      await _htspAction(() => htsp.removeRecording(recording.uuid));
+      return;
+    }
     await withClient((client) => client.removeRecording(recording.uuid));
     await _afterRecordingChange();
+  }
+
+  /// Runs an HTSP action; the server's push updates the lists afterwards.
+  Future<void> _htspAction(Future<void> Function() action) async {
+    try {
+      await action();
+    } on HtspException catch (error) {
+      throw TvhException(error.message);
+    }
   }
 
   Future<void> _afterRecordingChange() async {
@@ -539,7 +664,7 @@ class AppState extends ChangeNotifier {
   Future<void> _refreshGuideQuietly() async {
     final source = liveSource;
     final current = _content;
-    if (source == null || current == null) {
+    if (source == null || current == null || usesHtsp) {
       return;
     }
     try {
@@ -551,16 +676,7 @@ class AppState extends ChangeNotifier {
       if (_content != current) {
         return;
       }
-      _content = SourceContent(
-        playlist: current.playlist,
-        epg: guide,
-        warnings: current.warnings,
-        loadedAt: current.loadedAt,
-        resolvedSource: current.resolvedSource,
-        permissions: current.permissions,
-        serverInfo: current.serverInfo,
-        profiles: current.profiles,
-      );
+      _content = current.copyWith(epg: guide);
       notifyListeners();
     } catch (error) {
       debugPrint('Quiet guide refresh failed: $error');
@@ -625,8 +741,10 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _loadGeneration++;
     _ticker?.cancel();
+    _detachHtsp();
     super.dispose();
   }
 }

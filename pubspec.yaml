@@ -22,6 +22,7 @@ dependencies:
   provider: ^6.1.5
   shared_preferences: ^2.5.6
   path_provider: ^2.1.6
+  crypto: ^3.0.6
   file_selector: ^1.1.0
   # 2.x depends on package:material_ui, which defines a second ColorScheme
   # type that is incompatible with package:flutter/material.dart.

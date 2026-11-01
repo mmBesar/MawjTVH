@@ -112,6 +112,17 @@ class TvhAddress {
     return '${_base(_userInfo(user, pass))}/stream/channel/$uuid$query';
   }
 
+  /// Same as [streamUrl] for a numeric HTSP channel id.
+  String streamUrlById(
+    int channelId, {
+    String user = '',
+    String pass = '',
+    String profile = '',
+  }) {
+    final query = profile.trim().isEmpty ? '' : '?profile=${pct(profile.trim())}';
+    return '${_base(_userInfo(user, pass))}/stream/channelid/$channelId$query';
+  }
+
   /// URL of a finished (or still running) recording file.
   String dvrUrl(String uuid, {String user = '', String pass = ''}) {
     return '${_base(_userInfo(user, pass))}/dvrfile/$uuid';

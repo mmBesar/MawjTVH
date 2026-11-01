@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'htsp_backend.dart';
+import 'htsp_connection.dart';
 import 'models.dart';
 import 'tvh_address.dart';
 import 'tvh_client.dart';
@@ -28,6 +30,7 @@ class SourceContent {
     this.profiles = const <String>[],
     this.playlistFromCache = false,
     this.epgFromCache = false,
+    this.htsp,
   });
 
   final Playlist playlist;
@@ -45,6 +48,27 @@ class SourceContent {
   final List<String> profiles;
   final bool playlistFromCache;
   final bool epgFromCache;
+
+  /// The live HTSP session when the server is used natively; the owner closes
+  /// it.
+  final HtspBackend? htsp;
+
+  SourceContent copyWith({
+    Playlist? playlist,
+    EpgData? epg,
+  }) {
+    return SourceContent(
+      playlist: playlist ?? this.playlist,
+      epg: epg ?? this.epg,
+      warnings: warnings,
+      loadedAt: loadedAt,
+      resolvedSource: resolvedSource,
+      permissions: permissions,
+      serverInfo: serverInfo,
+      profiles: profiles,
+      htsp: htsp,
+    );
+  }
 }
 
 typedef TvhClientFactory = TvhClient Function(SourceConfig source);
@@ -72,6 +96,16 @@ class TvhLoader {
         info = await client.serverInfo();
       } on TvhException {
         // Nice to have, never a reason to fail.
+      }
+
+      if (source.useHtsp) {
+        return await _loadHtsp(
+          source.copyWith(address: client.address.baseUrl),
+          client,
+          permissions,
+          info,
+          guideHours,
+        );
       }
 
       final channelRows = await client.rawChannels();
@@ -132,6 +166,45 @@ class TvhLoader {
     } finally {
       client.close();
     }
+  }
+
+  Future<SourceContent> _loadHtsp(
+    SourceConfig source,
+    TvhClient client,
+    TvhPermissions permissions,
+    TvhServerInfo info,
+    int guideHours,
+  ) async {
+    final HtspBackend backend;
+    try {
+      backend = await HtspBackend.open(source, guideHours: guideHours);
+    } on HtspException catch (error) {
+      throw SourceLoadException(
+        'HTSP (port ${source.htspPort}): ${error.message}',
+        cause: error,
+      );
+    }
+    final channels = backend.channels();
+    if (channels.isEmpty) {
+      await backend.close();
+      throw SourceLoadException(
+        'The server sent no channels over HTSP. Check that this account is '
+        'allowed to use HTSP and can see channels.',
+      );
+    }
+    final epg = backend.guide();
+    final profiles = await client.streamProfiles();
+    return SourceContent(
+      playlist: Playlist(channels: channels),
+      epg: epg,
+      warnings: epg.isEmpty ? <LoadWarning>{LoadWarning.epgEmpty} : <LoadWarning>{},
+      loadedAt: DateTime.now(),
+      resolvedSource: source,
+      permissions: permissions,
+      serverInfo: info,
+      profiles: profiles,
+      htsp: backend,
+    );
   }
 
   /// Reloads only the guide, keeping the channels as they are. Used after a

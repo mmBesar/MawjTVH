@@ -13,6 +13,8 @@ class SourceConfig {
     this.password = '',
     this.profile = '',
     this.allowInsecureCerts = false,
+    this.useHtsp = false,
+    this.htspPort = 9982,
   });
 
   final String id;
@@ -29,6 +31,11 @@ class SourceConfig {
   final String profile;
   final bool allowInsecureCerts;
 
+  /// Talk to Tvheadend's native HTSP protocol for channels, guide and
+  /// recordings (live updates, no polling). Streams still use HTTP.
+  final bool useHtsp;
+  final int htspPort;
+
   SourceConfig copyWith({
     String? name,
     String? address,
@@ -36,6 +43,8 @@ class SourceConfig {
     String? password,
     String? profile,
     bool? allowInsecureCerts,
+    bool? useHtsp,
+    int? htspPort,
   }) {
     return SourceConfig(
       id: id,
@@ -45,6 +54,8 @@ class SourceConfig {
       password: password ?? this.password,
       profile: profile ?? this.profile,
       allowInsecureCerts: allowInsecureCerts ?? this.allowInsecureCerts,
+      useHtsp: useHtsp ?? this.useHtsp,
+      htspPort: htspPort ?? this.htspPort,
     );
   }
 
@@ -56,6 +67,8 @@ class SourceConfig {
         'password': password,
         'profile': profile,
         'allowInsecureCerts': allowInsecureCerts,
+        'useHtsp': useHtsp,
+        'htspPort': htspPort,
       };
 
   factory SourceConfig.fromJson(Map<String, dynamic> json) {
@@ -69,6 +82,8 @@ class SourceConfig {
       password: json['password'] as String? ?? '',
       profile: json['profile'] as String? ?? '',
       allowInsecureCerts: json['allowInsecureCerts'] as bool? ?? false,
+      useHtsp: json['useHtsp'] as bool? ?? false,
+      htspPort: (json['htspPort'] as num?)?.toInt() ?? 9982,
     );
   }
 }

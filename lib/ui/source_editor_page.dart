@@ -25,7 +25,9 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
   late final TextEditingController _username;
   late final TextEditingController _password;
   late final TextEditingController _profile;
+  late final TextEditingController _htspPort;
   late bool _allowInsecure;
+  late bool _useHtsp;
 
   bool _saving = false;
   bool _testing = false;
@@ -45,6 +47,8 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
     _password = TextEditingController(text: source?.password ?? '');
     _profile = TextEditingController(text: source?.profile ?? '');
     _allowInsecure = source?.allowInsecureCerts ?? false;
+    _useHtsp = source?.useHtsp ?? false;
+    _htspPort = TextEditingController(text: '${source?.htspPort ?? 9982}');
   }
 
   @override
@@ -54,6 +58,7 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
     _username.dispose();
     _password.dispose();
     _profile.dispose();
+    _htspPort.dispose();
     super.dispose();
   }
 
@@ -69,6 +74,8 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
       password: _password.text,
       profile: _profile.text.trim(),
       allowInsecureCerts: _allowInsecure,
+      useHtsp: _useHtsp,
+      htspPort: int.tryParse(_htspPort.text.trim()) ?? 9982,
     );
   }
 
@@ -332,6 +339,34 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
                         ),
                   ),
                 ),
+                SwitchListTile(
+                  value: _useHtsp,
+                  onChanged: (value) => setState(() => _useHtsp = value),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(strings.useHtsp),
+                  subtitle: Text(
+                    strings.useHtspHelp,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colors.subtext0,
+                          height: 1.4,
+                        ),
+                  ),
+                ),
+                if (_useHtsp) ...<Widget>[
+                  const SizedBox(height: 6),
+                  _label(context, strings.htspPort),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: _htspPort,
+                    keyboardType: TextInputType.number,
+                    textDirection: TextDirection.ltr,
+                    textAlign: TextAlign.start,
+                    decoration: const InputDecoration(
+                      hintText: '9982',
+                      prefixIcon: Icon(Icons.bolt_rounded),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 Row(
                   children: <Widget>[
