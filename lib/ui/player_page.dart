@@ -137,7 +137,8 @@ class _PlayerPageState extends State<PlayerPage> {
   Timer? _osdTimer;
   Timer? _errorTimer;
   int _autoRetries = 0;
-  bool _localRecording = false;
+  StreamRecorder? _recorder;
+  bool get _localRecording => _recorder != null;
 
   (int, int)? _softwareVideoSize;
   VideoParams? _videoParams;
@@ -345,19 +346,19 @@ class _PlayerPageState extends State<PlayerPage> {
   // ---- Recording to this device -------------------------------------------
 
   Future<void> _stopLocalRecording({bool silent = false}) async {
-    if (!_localRecording) {
+    final recorder = _recorder;
+    if (recorder == null) {
       return;
     }
-    await _setMpvProperty('stream-record', '');
+    _recorder = null;
+    await recorder.stop();
     if (mounted) {
-      setState(() => _localRecording = false);
+      setState(() {});
       if (!silent) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(context.strings.stopLocalRecording)),
         );
       }
-    } else {
-      _localRecording = false;
     }
   }
 
@@ -374,9 +375,21 @@ class _PlayerPageState extends State<PlayerPage> {
         state.settings.recordDir,
         _channel.name,
       );
-      await _setMpvProperty('stream-record', path);
+      final recorder = await StreamRecorder.start(
+        url: _channel.url,
+        path: path,
+        allowInsecure: state.activeSource?.allowInsecureCerts ?? false,
+        onError: (message) {
+          if (_recorder != null && mounted) {
+            _recorder = null;
+            setState(() {});
+            messenger.showSnackBar(SnackBar(content: Text(message)));
+          }
+        },
+      );
+      _recorder = recorder;
       if (mounted) {
-        setState(() => _localRecording = true);
+        setState(() {});
       }
       messenger
         ..hideCurrentSnackBar()
@@ -761,8 +774,10 @@ class _PlayerPageState extends State<PlayerPage> {
     _hideTimer?.cancel();
     _osdTimer?.cancel();
     _errorTimer?.cancel();
-    if (_localRecording) {
-      unawaited(_setMpvProperty('stream-record', ''));
+    final recorder = _recorder;
+    _recorder = null;
+    if (recorder != null) {
+      unawaited(recorder.stop());
     }
     _errorSubscription?.cancel();
     _playingSubscription?.cancel();

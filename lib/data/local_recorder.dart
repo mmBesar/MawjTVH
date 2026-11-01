@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
@@ -17,9 +19,8 @@ class LocalRecordingFile {
   final DateTime modified;
 }
 
-/// Where and how recordings made on this device are written. The player
-/// copies the stream it is playing into the file (mpv `stream-record`), so
-/// nothing is re-encoded.
+/// Where and how recordings made on this device are written. The stream
+/// is copied as it is (see [StreamRecorder]), so nothing is re-encoded.
 class LocalRecordings {
   const LocalRecordings._();
 
@@ -106,6 +107,108 @@ class LocalRecordings {
     final file = File(path);
     if (await file.exists()) {
       await file.delete();
+    }
+  }
+}
+
+/// Copies a live stream into a file over its own HTTP connection.
+///
+/// This does not touch the player: mpv's `stream-record` fails on Android
+/// (no file cache) and resets the connection on some desktop builds, so the
+/// recorder simply opens a second subscription on the same channel. Tvheadend
+/// shares the tuner between subscriptions, so this costs no extra tuner.
+class StreamRecorder {
+  StreamRecorder._(this.path, this._client, this._sink, this._done);
+
+  final String path;
+  final HttpClient _client;
+  final IOSink _sink;
+  final Future<void> _done;
+  bool _stopped = false;
+
+  /// Resolves when the stream ends or fails; completes with an error text
+  /// when it stopped on its own rather than because [stop] was called.
+  Future<void> get finished => _done;
+
+  /// Starts copying [url] into [path]. Throws if the server refuses.
+  static Future<StreamRecorder> start({
+    required String url,
+    required String path,
+    required bool allowInsecure,
+    void Function(String message)? onError,
+  }) async {
+    final uri = Uri.parse(url);
+    final userInfo = uri.userInfo;
+    final requestUri = userInfo.isEmpty
+        ? uri
+        : Uri(
+            scheme: uri.scheme,
+            host: uri.host,
+            port: uri.hasPort ? uri.port : null,
+            path: uri.path,
+            query: uri.query.isEmpty ? null : uri.query,
+          );
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 15)
+      ..userAgent = 'MawjTVH/0.1.0';
+    if (allowInsecure) {
+      client.badCertificateCallback = (_, _, _) => true;
+    }
+    try {
+      final request = await client.getUrl(requestUri);
+      if (userInfo.isNotEmpty) {
+        request.headers.set(
+          HttpHeaders.authorizationHeader,
+          'Basic ${base64Encode(utf8.encode(Uri.decodeComponent(userInfo)))}',
+        );
+      }
+      final response = await request.close();
+      if (response.statusCode != 200) {
+        await response.drain<void>();
+        throw HttpException('HTTP ${response.statusCode}', uri: requestUri);
+      }
+      final sink = File(path).openWrite();
+      late final StreamRecorder recorder;
+      final done = Completer<void>();
+      response.listen(
+        sink.add,
+        onError: (Object error) {
+          if (!recorder._stopped) {
+            onError?.call('$error');
+          }
+          if (!done.isCompleted) {
+            done.complete();
+          }
+        },
+        onDone: () {
+          if (!recorder._stopped) {
+            onError?.call('Stream ended');
+          }
+          if (!done.isCompleted) {
+            done.complete();
+          }
+        },
+        cancelOnError: true,
+      );
+      recorder = StreamRecorder._(path, client, sink, done.future);
+      return recorder;
+    } catch (_) {
+      client.close(force: true);
+      rethrow;
+    }
+  }
+
+  Future<void> stop() async {
+    if (_stopped) {
+      return;
+    }
+    _stopped = true;
+    _client.close(force: true);
+    try {
+      await _sink.flush();
+      await _sink.close();
+    } catch (_) {
+      // The file is already as complete as it will get.
     }
   }
 }

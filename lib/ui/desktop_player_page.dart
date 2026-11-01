@@ -51,7 +51,8 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   int _generation = 0;
   MpvSession? _lastSession;
   DateTime _startedAt = DateTime.now();
-  bool _localRecording = false;
+  StreamRecorder? _recorder;
+  bool get _localRecording => _recorder != null;
 
   @override
   void initState() {
@@ -154,11 +155,12 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   }
 
   Future<void> _stopLocalRecording({bool silent = false}) async {
-    if (!_localRecording) {
+    final recorder = _recorder;
+    if (recorder == null) {
       return;
     }
-    _localRecording = false;
-    await _session?.command(const <Object>['set_property', 'stream-record', '']);
+    _recorder = null;
+    await recorder.stop();
     if (mounted) {
       setState(() {});
       if (!silent) {
@@ -186,9 +188,21 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
         state.settings.recordDir,
         _channel.name,
       );
-      await session.command(<Object>['set_property', 'stream-record', path]);
+      final recorder = await StreamRecorder.start(
+        url: _channel.url,
+        path: path,
+        allowInsecure: state.activeSource?.allowInsecureCerts ?? false,
+        onError: (message) {
+          if (_recorder != null && mounted) {
+            _recorder = null;
+            setState(() {});
+            messenger.showSnackBar(SnackBar(content: Text(message)));
+          }
+        },
+      );
+      _recorder = recorder;
       if (mounted) {
-        setState(() => _localRecording = true);
+        setState(() {});
       }
       messenger
         ..hideCurrentSnackBar()
@@ -262,6 +276,11 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     _generation++;
     _decoderTimer?.cancel();
     _lifecycle?.dispose();
+    final recorder = _recorder;
+    _recorder = null;
+    if (recorder != null) {
+      unawaited(recorder.stop());
+    }
     final session = _session;
     _session = null;
     if (session != null) {
