@@ -1,4 +1,3 @@
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,8 +5,11 @@ import '../core/bidi.dart';
 import '../core/theme.dart';
 import '../data/app_state.dart';
 import '../data/models.dart';
+import '../data/tvh_address.dart';
 import '../l10n/strings.dart';
+import '../l10n/tvh_strings.dart';
 
+/// Add or edit a Tvheadend server.
 class SourceEditorPage extends StatefulWidget {
   const SourceEditorPage({super.key, this.source});
 
@@ -19,35 +21,39 @@ class SourceEditorPage extends StatefulWidget {
 
 class _SourceEditorPageState extends State<SourceEditorPage> {
   late final TextEditingController _name;
-  late final TextEditingController _m3u;
-  late final TextEditingController _epg;
-  late EndpointKind _m3uKind;
-  late EndpointKind _epgKind;
+  late final TextEditingController _address;
+  late final TextEditingController _username;
+  late final TextEditingController _password;
+  late final TextEditingController _profile;
   late bool _allowInsecure;
 
   bool _saving = false;
   bool _testing = false;
+  bool _showPassword = false;
   String? _formError;
   String? _testMessage;
   bool _testPassed = false;
+  List<String> _profiles = const <String>[];
 
   @override
   void initState() {
     super.initState();
     final source = widget.source;
     _name = TextEditingController(text: source?.name ?? '');
-    _m3u = TextEditingController(text: source?.m3u.value ?? '');
-    _epg = TextEditingController(text: source?.epg.value ?? '');
-    _m3uKind = source?.m3u.kind ?? EndpointKind.url;
-    _epgKind = source?.epg.kind ?? EndpointKind.url;
+    _address = TextEditingController(text: source?.address ?? '');
+    _username = TextEditingController(text: source?.username ?? '');
+    _password = TextEditingController(text: source?.password ?? '');
+    _profile = TextEditingController(text: source?.profile ?? '');
     _allowInsecure = source?.allowInsecureCerts ?? false;
   }
 
   @override
   void dispose() {
     _name.dispose();
-    _m3u.dispose();
-    _epg.dispose();
+    _address.dispose();
+    _username.dispose();
+    _password.dispose();
+    _profile.dispose();
     super.dispose();
   }
 
@@ -57,9 +63,11 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
     final trimmedName = _name.text.trim();
     return SourceConfig(
       id: widget.source?.id ?? generateSourceId(),
-      name: trimmedName.isEmpty ? 'Source' : trimmedName,
-      m3u: SourceEndpoint(value: _m3u.text.trim(), kind: _m3uKind),
-      epg: SourceEndpoint(value: _epg.text.trim(), kind: _epgKind),
+      name: trimmedName.isEmpty ? _address.text.trim() : trimmedName,
+      address: _address.text.trim(),
+      username: _username.text.trim(),
+      password: _password.text,
+      profile: _profile.text.trim(),
       allowInsecureCerts: _allowInsecure,
     );
   }
@@ -67,60 +75,17 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
   bool _validate() {
     final strings = context.strings;
     String? error;
-    if (_name.text.trim().isEmpty) {
-      error = strings.sourceNameRequired;
-    } else if (_m3u.text.trim().isEmpty) {
-      error = strings.playlistRequired;
-    } else if (!_validEndpoint(_m3u.text.trim(), _m3uKind)) {
-      error = strings.invalidLocation;
-    } else if (_epg.text.trim().isNotEmpty &&
-        !_validEndpoint(_epg.text.trim(), _epgKind)) {
-      error = strings.invalidLocation;
+    if (_address.text.trim().isEmpty) {
+      error = strings.addressRequired;
+    } else {
+      try {
+        TvhAddress.parse(_address.text);
+      } on TvhAddressException catch (problem) {
+        error = problem.message;
+      }
     }
     setState(() => _formError = error);
     return error == null;
-  }
-
-  bool _validEndpoint(String value, EndpointKind kind) {
-    if (kind == EndpointKind.file) {
-      return value.isNotEmpty;
-    }
-    final uri = Uri.tryParse(value);
-    return uri != null &&
-        (uri.scheme == 'http' || uri.scheme == 'https') &&
-        uri.host.isNotEmpty;
-  }
-
-  Future<void> _pickFile({required bool playlist}) async {
-    final strings = context.strings;
-    final type = playlist
-        ? const XTypeGroup(
-            label: 'M3U',
-            extensions: <String>['m3u', 'm3u8'],
-          )
-        : const XTypeGroup(
-            label: 'XMLTV',
-            extensions: <String>['xml', 'xmltv', 'gz'],
-          );
-    try {
-      final file = await openFile(acceptedTypeGroups: <XTypeGroup>[type]);
-      if (file == null || !mounted) {
-        return;
-      }
-      setState(() {
-        if (playlist) {
-          _m3u.text = file.path;
-          _m3uKind = EndpointKind.file;
-        } else {
-          _epg.text = file.path;
-          _epgKind = EndpointKind.file;
-        }
-      });
-    } catch (error) {
-      if (mounted) {
-        setState(() => _formError = '${strings.errorGeneric} $error');
-      }
-    }
   }
 
   Future<void> _test() async {
@@ -141,9 +106,12 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
       }
       setState(() {
         _testPassed = true;
-        _testMessage = strings.testSummary(
-          content.playlist.channels.length,
-          content.epg.programmeCount,
+        _profiles = content.profiles;
+        _testMessage = strings.connectedSummary(
+          server: '${content.serverInfo.name} ${content.serverInfo.version}'.trim(),
+          channels: content.playlist.channels.length,
+          programmes: content.epg.programmeCount,
+          admin: content.permissions.admin,
         );
       });
     } catch (error) {
@@ -187,6 +155,29 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
     }
   }
 
+  Widget _label(BuildContext context, String text) {
+    return Text(
+      text,
+      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+    );
+  }
+
+  Widget _help(BuildContext context, String text) {
+    final colors = context.mawjColors;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colors.subtext0,
+              height: 1.4,
+            ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
@@ -223,55 +214,110 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
                 if (_formError != null) ...<Widget>[
-                  _ResultCard(
-                    message: _formError!,
-                    passed: false,
-                  ),
+                  _ResultCard(message: _formError!, passed: false),
                   const SizedBox(height: 16),
                 ],
-                Text(
-                  strings.sourceName,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
+                _label(context, strings.sourceName),
                 const SizedBox(height: 6),
                 TextField(
                   controller: _name,
                   textInputAction: TextInputAction.next,
                   decoration: InputDecoration(
-                    hintText: strings.sourceNameHint,
+                    hintText: strings.serverNameHint,
                     prefixIcon: const Icon(Icons.label_outline_rounded),
                   ),
                 ),
                 const SizedBox(height: 22),
-                _EndpointField(
-                  label: strings.playlistM3u,
-                  hint: 'https://example.com/channels.m3u',
-                  fileHint: '/home/you/channels.m3u',
-                  help: strings.playlistHelp,
-                  controller: _m3u,
-                  kind: _m3uKind,
-                  onKindChanged: (kind) => setState(() => _m3uKind = kind),
-                  onBrowse: () => _pickFile(playlist: true),
-                  browseLabel: strings.chooseFile,
-                  fileLabel: strings.file,
-                  urlLabel: strings.url,
+                _label(context, strings.serverAddress),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _address,
+                  keyboardType: TextInputType.url,
+                  textInputAction: TextInputAction.next,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  // Addresses are LTR even when the interface is Arabic.
+                  textDirection: TextDirection.ltr,
+                  textAlign: TextAlign.start,
+                  decoration: const InputDecoration(
+                    hintText: 'tv.example.com  ·  10.0.0.5:9981',
+                    prefixIcon: Icon(Icons.dns_rounded),
+                  ),
                 ),
+                _help(context, strings.serverAddressHelp),
                 const SizedBox(height: 22),
-                _EndpointField(
-                  label: strings.xmltvGuide,
-                  hint: 'https://example.com/xmltv.xml',
-                  fileHint: '/home/you/guide.xml',
-                  help: strings.guideHelp,
-                  controller: _epg,
-                  kind: _epgKind,
-                  onKindChanged: (kind) => setState(() => _epgKind = kind),
-                  onBrowse: () => _pickFile(playlist: false),
-                  browseLabel: strings.chooseFile,
-                  fileLabel: strings.file,
-                  urlLabel: strings.url,
+                _label(context, strings.username),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _username,
+                  textInputAction: TextInputAction.next,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  textDirection: TextDirection.ltr,
+                  textAlign: TextAlign.start,
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.person_outline_rounded),
+                  ),
                 ),
+                const SizedBox(height: 14),
+                _label(context, strings.password),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _password,
+                  obscureText: !_showPassword,
+                  textInputAction: TextInputAction.next,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  textDirection: TextDirection.ltr,
+                  textAlign: TextAlign.start,
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.key_rounded),
+                    suffixIcon: IconButton(
+                      tooltip: _showPassword
+                          ? strings.hidePassword
+                          : strings.showPassword,
+                      icon: Icon(
+                        _showPassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                      ),
+                      onPressed: () =>
+                          setState(() => _showPassword = !_showPassword),
+                    ),
+                  ),
+                ),
+                _help(context, strings.usernameHelp),
+                const SizedBox(height: 22),
+                _label(context, strings.streamProfile),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _profile,
+                  textInputAction: TextInputAction.done,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  textDirection: TextDirection.ltr,
+                  textAlign: TextAlign.start,
+                  decoration: const InputDecoration(
+                    hintText: 'pass',
+                    prefixIcon: Icon(Icons.tune_rounded),
+                  ),
+                ),
+                if (_profiles.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: <Widget>[
+                      for (final name in _profiles)
+                        ChoiceChip(
+                          label: Text(name),
+                          selected: _profile.text.trim() == name,
+                          onSelected: (_) => setState(() => _profile.text = name),
+                        ),
+                    ],
+                  ),
+                ],
+                _help(context, strings.streamProfileHelp),
                 const SizedBox(height: 10),
                 SwitchListTile(
                   value: _allowInsecure,
@@ -324,114 +370,6 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _EndpointField extends StatelessWidget {
-  const _EndpointField({
-    required this.label,
-    required this.hint,
-    required this.fileHint,
-    required this.help,
-    required this.controller,
-    required this.kind,
-    required this.onKindChanged,
-    required this.onBrowse,
-    required this.browseLabel,
-    required this.fileLabel,
-    required this.urlLabel,
-  });
-
-  final String label;
-  final String hint;
-  final String fileHint;
-  final String help;
-  final TextEditingController controller;
-  final EndpointKind kind;
-  final ValueChanged<EndpointKind> onKindChanged;
-  final VoidCallback onBrowse;
-  final String browseLabel;
-  final String fileLabel;
-  final String urlLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.mawjColors;
-    final isFile = kind == EndpointKind.file;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-        ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          keyboardType: isFile ? TextInputType.text : TextInputType.url,
-          textInputAction: TextInputAction.next,
-          // URLs and filesystem paths are LTR even when the interface is Arabic.
-          textDirection: TextDirection.ltr,
-          textAlign: TextAlign.start,
-          decoration: InputDecoration(
-            hintText: isFile ? fileHint : hint,
-            prefixIcon: Icon(
-              isFile ? Icons.insert_drive_file_outlined : Icons.link_rounded,
-            ),
-            suffixIcon: isFile
-                ? IconButton(
-                    tooltip: browseLabel,
-                    icon: const Icon(Icons.folder_open_rounded),
-                    onPressed: onBrowse,
-                  )
-                : null,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: <Widget>[
-            SegmentedButton<EndpointKind>(
-              segments: <ButtonSegment<EndpointKind>>[
-                ButtonSegment<EndpointKind>(
-                  value: EndpointKind.url,
-                  label: Text(urlLabel),
-                  icon: const Icon(Icons.link_rounded, size: 16),
-                ),
-                ButtonSegment<EndpointKind>(
-                  value: EndpointKind.file,
-                  label: Text(fileLabel),
-                  icon: const Icon(Icons.folder_open_rounded, size: 16),
-                ),
-              ],
-              selected: <EndpointKind>{kind},
-              onSelectionChanged: (selection) => onKindChanged(selection.first),
-              showSelectedIcon: false,
-              style: const ButtonStyle(
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-            if (isFile) ...<Widget>[
-              const SizedBox(width: 10),
-              TextButton.icon(
-                onPressed: onBrowse,
-                icon: const Icon(Icons.folder_open_rounded, size: 16),
-                label: Text(browseLabel),
-              ),
-            ],
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          help,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colors.subtext0,
-                height: 1.4,
-              ),
-        ),
-      ],
     );
   }
 }

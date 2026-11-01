@@ -8,8 +8,10 @@ import 'package:flutter/foundation.dart';
 import '../core/catppuccin.dart';
 import '../core/text.dart';
 import 'models.dart';
-import 'playlist_loader.dart';
 import 'storage.dart';
+import 'tvh_client.dart';
+import 'tvh_loader.dart';
+import 'tvh_models.dart';
 
 /// Central application state: persisted sources and settings, the currently
 /// loaded channel/EPG snapshot, and a lightweight ticker so "now playing"
@@ -17,11 +19,11 @@ import 'storage.dart';
 class AppState extends ChangeNotifier {
   AppState({
     required StorageService storage,
-    PlaylistLoader? loader,
+    TvhLoader? loader,
   })  : _storage = storage,
-        _loader = loader ?? PlaylistLoader();
+        _loader = loader ?? TvhLoader();
 
-  static Future<AppState> create({PlaylistLoader? loader}) async {
+  static Future<AppState> create({TvhLoader? loader}) async {
     final storage = await StorageService.create();
     final state = AppState(storage: storage, loader: loader);
     state._restore();
@@ -29,7 +31,7 @@ class AppState extends ChangeNotifier {
   }
 
   final StorageService _storage;
-  final PlaylistLoader _loader;
+  final TvhLoader _loader;
   Timer? _ticker;
   int _loadGeneration = 0;
 
@@ -59,7 +61,6 @@ class AppState extends ChangeNotifier {
   bool get hasContent => _content != null;
   String? get error => _error;
   Set<LoadWarning> get warnings => Set<LoadWarning>.unmodifiable(_warnings);
-  String? get xmltvLocation => _content?.xmltvLocation;
   DateTime? get lastLoaded => _content?.loadedAt;
 
   /// Distinct group names in playlist order.
@@ -122,6 +123,7 @@ class AppState extends ChangeNotifier {
     final source = activeSource;
     if (source == null) {
       _content = null;
+      _recordings = const <TvhRecording>[];
       _warnings = <LoadWarning>{};
       _error = null;
       _loading = false;
@@ -135,7 +137,10 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final content = await _loader.load(source);
+      final content = await _loader.load(
+        source,
+        guideHours: _settings.guideHours,
+      );
       if (generation != _loadGeneration) {
         return;
       }
@@ -279,6 +284,7 @@ class AppState extends ChangeNotifier {
     }
     _settings = _settings.copyWith(activeSourceId: sourceId);
     _content = null;
+    _recordings = const <TvhRecording>[];
     _warnings = <LoadWarning>{};
     _error = null;
     _loadUserLists();
@@ -294,6 +300,7 @@ class AppState extends ChangeNotifier {
     await _storage.saveSources(_sources);
     await _storage.saveSettings(_settings);
     _content = null;
+    _recordings = const <TvhRecording>[];
     _loadUserLists();
     _indexChannels(const <Channel>[]);
     notifyListeners();
@@ -327,6 +334,7 @@ class AppState extends ChangeNotifier {
         activeSourceId: remaining.isEmpty ? null : remaining.first.id,
       );
       _content = null;
+      _recordings = const <TvhRecording>[];
       _warnings = <LoadWarning>{};
       _error = null;
       _loadUserLists();
@@ -369,8 +377,167 @@ class AppState extends ChangeNotifier {
 
   Future<SourceContent> probe(SourceConfig source) => _loader.probe(source);
 
+  // ---- Tvheadend specifics -------------------------------------------------
+
+  /// What the server lets this account do, learned while loading.
+  TvhPermissions get permissions =>
+      _content?.permissions ?? const TvhPermissions(admin: false);
+
+  bool get isAdmin => permissions.admin;
+  TvhServerInfo get serverInfo => _content?.serverInfo ?? const TvhServerInfo();
+
+  /// Stream profile names the account may use.
+  List<String> get streamProfiles => _content?.profiles ?? const <String>[];
+
+  /// The source as the server really answers (address moved to https...).
+  SourceConfig? get liveSource => _content?.resolvedSource ?? activeSource;
+
+  /// Runs [action] with a short-lived client for the active server.
+  Future<T> withClient<T>(Future<T> Function(TvhClient client) action) async {
+    final source = liveSource;
+    if (source == null) {
+      throw const TvhException('No server is selected.');
+    }
+    final client = TvhClient(source);
+    try {
+      return await action(client);
+    } finally {
+      client.close();
+    }
+  }
+
+  List<TvhRecording> _recordings = const <TvhRecording>[];
+  String? _recordingsError;
+  bool _recordingsLoading = false;
+
+  List<TvhRecording> get recordings => _recordings;
+  String? get recordingsError => _recordingsError;
+  bool get recordingsLoading => _recordingsLoading;
+
+  Future<void> loadRecordings() async {
+    if (activeSource == null || _recordingsLoading) {
+      return;
+    }
+    _recordingsLoading = true;
+    _recordingsError = null;
+    notifyListeners();
+    try {
+      final all = await withClient((client) async {
+        final upcoming = await client.recordings(RecordingKind.upcoming);
+        final finished = await client.recordings(RecordingKind.finished);
+        final failed = await client.recordings(RecordingKind.failed);
+        return <TvhRecording>[...upcoming, ...finished, ...failed];
+      });
+      _recordings = all;
+    } catch (error) {
+      _recordingsError = _messageFor(error);
+    } finally {
+      _recordingsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Recording state of a programme, as the server last reported it.
+  Future<void> recordProgramme(Programme programme, {bool series = false}) async {
+    final id = programme.eventId;
+    if (id == null) {
+      throw const TvhException('This programme cannot be recorded.');
+    }
+    await withClient((client) {
+      return series ? client.recordSeries(id) : client.recordEvent(id);
+    });
+    await _afterRecordingChange();
+  }
+
+  Future<void> recordChannelNow(Channel channel, int minutes) async {
+    final title = epg.nowFor(channel, DateTime.now())?.title ?? channel.name;
+    await withClient((client) => client.recordNow(channel.id, title, minutes));
+    await _afterRecordingChange();
+  }
+
+  Future<void> stopRecording(TvhRecording recording) async {
+    await withClient((client) => client.stopRecording(recording.uuid));
+    await _afterRecordingChange();
+  }
+
+  Future<void> cancelRecording(TvhRecording recording) async {
+    await withClient((client) => client.cancelRecording(recording.uuid));
+    await _afterRecordingChange();
+  }
+
+  Future<void> removeRecording(TvhRecording recording) async {
+    await withClient((client) => client.removeRecording(recording.uuid));
+    await _afterRecordingChange();
+  }
+
+  Future<void> _afterRecordingChange() async {
+    unawaited(loadRecordings());
+    unawaited(_refreshGuideQuietly());
+  }
+
+  Future<void> _refreshGuideQuietly() async {
+    final source = liveSource;
+    final current = _content;
+    if (source == null || current == null) {
+      return;
+    }
+    try {
+      final guide = await _loader.loadGuide(
+        source,
+        current.playlist.channels,
+        guideHours: _settings.guideHours,
+      );
+      if (_content != current) {
+        return;
+      }
+      _content = SourceContent(
+        playlist: current.playlist,
+        epg: guide,
+        warnings: current.warnings,
+        loadedAt: current.loadedAt,
+        resolvedSource: current.resolvedSource,
+        permissions: current.permissions,
+        serverInfo: current.serverInfo,
+        profiles: current.profiles,
+      );
+      notifyListeners();
+    } catch (error) {
+      debugPrint('Quiet guide refresh failed: $error');
+    }
+  }
+
+  /// Signal of the stream being watched. Needs an administrator account on
+  /// the server; for anyone else this is `null`.
+  Future<TvhSignal?> signalFor(Channel channel) async {
+    if (!isAdmin) {
+      return null;
+    }
+    try {
+      return await withClient((client) => client.signalFor(channel.name));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Address of a finished recording's file, with the login in the URL.
+  String? recordingUrl(TvhRecording recording) {
+    final source = liveSource;
+    if (source == null || !recording.hasFile) {
+      return null;
+    }
+    final client = TvhClient(source);
+    try {
+      return client.recordingUrl(recording.uuid);
+    } finally {
+      client.close();
+    }
+  }
+
   String _messageFor(Object error) {
     if (error is SourceLoadException) {
+      return error.message;
+    }
+    if (error is TvhException) {
       return error.message;
     }
     return error.toString();

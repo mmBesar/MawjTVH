@@ -6,9 +6,11 @@ import '../../core/theme.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../l10n/strings.dart';
+import '../../l10n/tvh_strings.dart';
 import '../player_page.dart';
 import 'channel_logo.dart';
 import 'programme_poster.dart';
+import 'record_actions.dart';
 import 'wave.dart';
 
 /// Details of one programme, with a way to watch its channel.
@@ -166,7 +168,24 @@ class _ProgrammeSheet extends StatelessWidget {
                 fontStyle: FontStyle.italic,
               ),
             ),
-          if (programme.categories.isNotEmpty) ...<Widget>[
+          if (programme.facts != null) ...<Widget>[
+            const SizedBox(height: 14),
+            BidiText(
+              programme.facts!,
+              style: theme.textTheme.bodySmall?.copyWith(color: colors.subtext0),
+            ),
+          ],
+          if (programme.credits != null) ...<Widget>[
+            const SizedBox(height: 6),
+            BidiText(
+              programme.credits!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.subtext0,
+                height: 1.5,
+              ),
+            ),
+          ],
+          if (programme.categories.isNotEmpty && programme.facts == null) ...<Widget>[
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,
@@ -189,6 +208,54 @@ class _ProgrammeSheet extends StatelessWidget {
                       ),
                     ),
                   ),
+              ],
+            ),
+          ],
+          if (programme.eventId != null &&
+              programme.stop.isAfter(now)) ...<Widget>[
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: <Widget>[
+                if (programme.hasRecording)
+                  Chip(
+                    avatar: Icon(
+                      Icons.fiber_manual_record_rounded,
+                      size: 14,
+                      color: programme.dvrState == 'recording'
+                          ? Theme.of(context).colorScheme.error
+                          : colors.accent,
+                    ),
+                    label: Text(
+                      programme.dvrState == 'recording'
+                          ? strings.recordingNow
+                          : strings.scheduled,
+                    ),
+                  )
+                else ...<Widget>[
+                  FilledButton.tonalIcon(
+                    onPressed: () => runServerAction(
+                      context,
+                      action: () => state.recordProgramme(programme),
+                      success: strings.recordingScheduled,
+                      forbidden: strings.recordingsForbidden,
+                    ),
+                    icon: const Icon(Icons.fiber_manual_record_rounded, size: 16),
+                    label: Text(strings.record),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => runServerAction(
+                      context,
+                      action: () => state.recordProgramme(programme, series: true),
+                      success: strings.recordingScheduled,
+                      forbidden: strings.recordingsForbidden,
+                    ),
+                    icon: const Icon(Icons.repeat_rounded, size: 16),
+                    label: Text(strings.recordSeries),
+                  ),
+                ],
               ],
             ),
           ],

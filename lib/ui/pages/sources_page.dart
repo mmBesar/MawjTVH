@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 import '../../core/bidi.dart';
@@ -236,7 +235,7 @@ class _SourceCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 3),
                           BidiText(
-                            _locationLabel(source.m3u),
+                            source.address,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodySmall?.copyWith(
@@ -289,16 +288,15 @@ class _SourceCard extends StatelessWidget {
                   runSpacing: 8,
                   children: <Widget>[
                     _InfoChip(
-                      icon: Icons.playlist_play_rounded,
-                      label: source.m3u.isFile ? strings.file : strings.url,
+                      icon: Icons.person_outline_rounded,
+                      label: source.username.isEmpty ? '—' : source.username,
+                      muted: source.username.isEmpty,
                     ),
-                    _InfoChip(
-                      icon: Icons.calendar_month_rounded,
-                      label: source.epg.isEmpty
-                          ? strings.notConfigured
-                          : (source.epg.isFile ? strings.file : strings.url),
-                      muted: source.epg.isEmpty,
-                    ),
+                    if (source.profile.isNotEmpty)
+                      _InfoChip(
+                        icon: Icons.tune_rounded,
+                        label: source.profile,
+                      ),
                     if (source.allowInsecureCerts)
                       _InfoChip(
                         icon: Icons.lock_open_rounded,
@@ -313,24 +311,6 @@ class _SourceCard extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String _locationLabel(SourceEndpoint endpoint) {
-    final value = endpoint.value.trim();
-    if (value.isEmpty) {
-      return '—';
-    }
-    if (endpoint.isFile) {
-      return p.basename(value);
-    }
-    final uri = Uri.tryParse(value);
-    if (uri != null && uri.host.isNotEmpty) {
-      final path = uri.path.length > 48
-          ? '${uri.path.substring(0, 45)}…'
-          : uri.path;
-      return '${uri.host}$path';
-    }
-    return value;
   }
 }
 

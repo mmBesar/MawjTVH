@@ -8,7 +8,7 @@ import 'package:flutter/painting.dart';
 import 'package:path_provider/path_provider.dart';
 
 const String kMawjUserAgent =
-    'MawjTVH/0.2.0 (+https://github.com/mmbesar/MawjTVH)';
+    'MawjTVH/0.1.0 (+https://github.com/mmBesar/MawjTVH)';
 
 /// Every poster and logo owns a socket while it downloads. A guide built from
 /// a full XMLTV file can ask for thousands of images at once, and that burst
@@ -104,6 +104,23 @@ class MawjNetworkImage extends ImageProvider<MawjNetworkImage> {
       throw ArgumentError.value(key.url, 'url', 'Unsupported image scheme');
     }
 
+    // A Tvheadend picture comes with the login as URL user info. HttpClient
+    // does not turn that into a header by itself, so do it here and keep the
+    // password out of the request line.
+    final userInfo = uri.userInfo;
+    final requestUri = userInfo.isEmpty
+        ? uri
+        : Uri(
+            scheme: uri.scheme,
+            host: uri.host,
+            port: uri.hasPort ? uri.port : null,
+            path: uri.path,
+            query: uri.query.isEmpty ? null : uri.query,
+          );
+    final authorization = userInfo.isEmpty
+        ? null
+        : 'Basic ${base64Encode(utf8.encode(Uri.decodeComponent(userInfo)))}';
+
     // Logos are served again every time Flutter's in-memory image cache
     // evicts them (a big playlist can push the previous source out). Keep a
     // bounded copy on disk so switching sources, restarting, or a busy logo
@@ -132,9 +149,12 @@ class MawjNetworkImage extends ImageProvider<MawjNetworkImage> {
 
         try {
           final request = await client
-              .getUrl(uri)
+              .getUrl(requestUri)
               .timeout(const Duration(seconds: 15));
           request.headers.set(HttpHeaders.acceptHeader, 'image/*,*/*;q=0.8');
+          if (authorization != null) {
+            request.headers.set(HttpHeaders.authorizationHeader, authorization);
+          }
           final response =
               await request.close().timeout(const Duration(seconds: 15));
           if (response.statusCode < 200 || response.statusCode >= 300) {

@@ -27,23 +27,24 @@ void main() {
     expect(loaded.use24HourTime, isTrue);
     expect(loaded.activeSourceId, 'home');
 
-    final source = SourceConfig(
+    const source = SourceConfig(
       id: 'home',
-      name: 'تونار المنزل',
-      m3u: const SourceEndpoint(value: 'https://tunarr.hs.lan/api/channels.m3u'),
-      epg: const SourceEndpoint(
-        value: '/home/user/guide.xml',
-        kind: EndpointKind.file,
-      ),
+      name: 'تيفي هيد المنزل',
+      address: 'https://tv.hs.lan',
+      username: 'mm',
+      password: 'p@ss:word',
+      profile: 'matroska',
       allowInsecureCerts: true,
     );
     await storage.saveSources(<SourceConfig>[source]);
 
     final sources = storage.loadSources();
     expect(sources, hasLength(1));
-    expect(sources.single.name, 'تونار المنزل');
-    expect(sources.single.m3u.kind, EndpointKind.url);
-    expect(sources.single.epg.kind, EndpointKind.file);
+    expect(sources.single.name, 'تيفي هيد المنزل');
+    expect(sources.single.address, 'https://tv.hs.lan');
+    expect(sources.single.username, 'mm');
+    expect(sources.single.password, 'p@ss:word');
+    expect(sources.single.profile, 'matroska');
     expect(sources.single.allowInsecureCerts, isTrue);
   });
 

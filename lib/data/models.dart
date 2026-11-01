@@ -2,76 +2,48 @@ import 'dart:math';
 
 import '../core/catppuccin.dart';
 
-/// A user-configured playlist/EPG pair. Every source keeps its own M3U and
-/// XMLTV location, and its own TLS policy.
-enum EndpointKind { url, file }
-
-class SourceEndpoint {
-  const SourceEndpoint({required this.value, this.kind = EndpointKind.url});
-
-  final String value;
-  final EndpointKind kind;
-
-  bool get isFile => kind == EndpointKind.file;
-  bool get isEmpty => value.trim().isEmpty;
-
-  SourceEndpoint copyWith({String? value, EndpointKind? kind}) {
-    return SourceEndpoint(
-      value: value ?? this.value,
-      kind: kind ?? this.kind,
-    );
-  }
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'value': value,
-        'kind': kind.name,
-      };
-
-  factory SourceEndpoint.fromJson(dynamic json) {
-    if (json is String) {
-      return SourceEndpoint(value: json);
-    }
-    if (json is Map) {
-      final map = json.cast<String, dynamic>();
-      final kindName = map['kind'] as String? ?? 'url';
-      return SourceEndpoint(
-        value: map['value'] as String? ?? '',
-        kind: EndpointKind.values.firstWhere(
-          (value) => value.name == kindName,
-          orElse: () => EndpointKind.url,
-        ),
-      );
-    }
-    return const SourceEndpoint(value: '');
-  }
-}
-
+/// A Tvheadend server the person has added: where it is, who they are on it,
+/// and how its streams should be fetched.
 class SourceConfig {
   const SourceConfig({
     required this.id,
     required this.name,
-    required this.m3u,
-    required this.epg,
+    required this.address,
+    this.username = '',
+    this.password = '',
+    this.profile = '',
     this.allowInsecureCerts = false,
   });
 
   final String id;
   final String name;
-  final SourceEndpoint m3u;
-  final SourceEndpoint epg;
+
+  /// What the person typed: `10.0.0.5`, `tv.lan:9981`, `https://tv.example.com`
+  /// or `https://example.com/tvh` (a web root). See `TvhAddress.parse`.
+  final String address;
+  final String username;
+  final String password;
+
+  /// Tvheadend stream profile (`pass`, `matroska`, a transcoder...). Empty
+  /// means "pass", the unmodified stream.
+  final String profile;
   final bool allowInsecureCerts;
 
   SourceConfig copyWith({
     String? name,
-    SourceEndpoint? m3u,
-    SourceEndpoint? epg,
+    String? address,
+    String? username,
+    String? password,
+    String? profile,
     bool? allowInsecureCerts,
   }) {
     return SourceConfig(
       id: id,
       name: name ?? this.name,
-      m3u: m3u ?? this.m3u,
-      epg: epg ?? this.epg,
+      address: address ?? this.address,
+      username: username ?? this.username,
+      password: password ?? this.password,
+      profile: profile ?? this.profile,
       allowInsecureCerts: allowInsecureCerts ?? this.allowInsecureCerts,
     );
   }
@@ -79,8 +51,10 @@ class SourceConfig {
   Map<String, dynamic> toJson() => <String, dynamic>{
         'id': id,
         'name': name,
-        'm3u': m3u.toJson(),
-        'epg': epg.toJson(),
+        'address': address,
+        'username': username,
+        'password': password,
+        'profile': profile,
         'allowInsecureCerts': allowInsecureCerts,
       };
 
@@ -89,9 +63,11 @@ class SourceConfig {
     final rawName = (json['name'] as String?)?.trim() ?? '';
     return SourceConfig(
       id: rawId.isEmpty ? generateSourceId() : rawId,
-      name: rawName.isEmpty ? 'Source' : rawName,
-      m3u: SourceEndpoint.fromJson(json['m3u']),
-      epg: SourceEndpoint.fromJson(json['epg']),
+      name: rawName.isEmpty ? 'Tvheadend' : rawName,
+      address: (json['address'] as String?)?.trim() ?? '',
+      username: json['username'] as String? ?? '',
+      password: json['password'] as String? ?? '',
+      profile: json['profile'] as String? ?? '',
       allowInsecureCerts: json['allowInsecureCerts'] as bool? ?? false,
     );
   }
@@ -108,9 +84,10 @@ class Channel {
     this.channelId = '',
     this.logoUrl,
     this.group,
+    this.tags = const <String>[],
   });
 
-  /// Stable internal identity, unique per source.
+  /// Stable internal identity, unique per source (the Tvheadend channel uuid).
   final String id;
   final String sourceId;
   final String name;
@@ -119,7 +96,12 @@ class Channel {
   final String tvgId;
   final String channelId;
   final String? logoUrl;
+
+  /// The first (lowest-indexed) channel tag, used as the channel's group.
   final String? group;
+
+  /// Every channel tag name this channel belongs to.
+  final List<String> tags;
 
   String get displayNumber => number.isEmpty ? '—' : number;
 }
@@ -135,6 +117,11 @@ class Programme {
     this.categories = const <String>[],
     this.iconUrl,
     this.episode,
+    this.eventId,
+    this.dvrUuid,
+    this.dvrState,
+    this.facts,
+    this.credits,
   });
 
   final String channelId;
@@ -146,6 +133,23 @@ class Programme {
   final List<String> categories;
   final String? iconUrl;
   final String? episode;
+
+  /// Tvheadend's EPG event id, needed to schedule a recording.
+  final int? eventId;
+
+  /// Set when the server has this programme as a recording (any state).
+  final String? dvrUuid;
+
+  /// `scheduled`, `recording`, `completed`, `missed`... as the server says.
+  final String? dvrState;
+
+  /// One line of facts: year, categories, rating.
+  final String? facts;
+
+  /// One line of credits: directors, cast.
+  final String? credits;
+
+  bool get hasRecording => dvrUuid != null && dvrUuid!.isNotEmpty;
 
   bool isLiveAt(DateTime now) => !now.isBefore(start) && now.isBefore(stop);
 
@@ -170,12 +174,9 @@ class ProgrammeHit {
 }
 
 class Playlist {
-  const Playlist({required this.channels, this.xmltvUrl});
+  const Playlist({required this.channels});
 
   final List<Channel> channels;
-
-  /// The `url-tvg` / `x-tvg-url` advertised by the M3U header, if any.
-  final String? xmltvUrl;
 }
 
 class EpgData {
