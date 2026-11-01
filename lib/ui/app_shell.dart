@@ -9,8 +9,10 @@ import '../core/platform.dart';
 import '../core/theme.dart';
 import '../data/app_state.dart';
 import '../l10n/strings.dart';
+import '../l10n/tvh_strings.dart';
 import 'pages/favorites_page.dart';
 import 'pages/guide_page.dart';
+import 'pages/recordings_page.dart';
 import 'pages/search_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/sources_page.dart';
@@ -25,6 +27,7 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
+  static const int _searchIndex = 4;
   int _index = 0;
   final ValueNotifier<int> _searchFocus = ValueNotifier<int>(0);
   final PageController _pageController = PageController();
@@ -58,7 +61,7 @@ class _AppShellState extends State<AppShell> {
         ),
       );
     }
-    if (index == 3) {
+    if (index == _searchIndex) {
       _searchFocus.value++;
     }
   }
@@ -94,7 +97,7 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  /// Ctrl+1..5 switch tab, Ctrl+F / Ctrl+K search, Ctrl+R refresh. This is a
+  /// Ctrl+1..6 switch tab, Ctrl+F / Ctrl+K search, Ctrl+R refresh. This is a
   /// global handler so it works wherever keyboard focus happens to be, and
   /// stays quiet while another page (the player, a sheet) is on top.
   bool _onKey(KeyEvent event) {
@@ -114,6 +117,7 @@ class _AppShellState extends State<AppShell> {
       LogicalKeyboardKey.digit3,
       LogicalKeyboardKey.digit4,
       LogicalKeyboardKey.digit5,
+      LogicalKeyboardKey.digit6,
     ];
     final tab = tabs.indexOf(key);
     if (tab >= 0) {
@@ -121,7 +125,7 @@ class _AppShellState extends State<AppShell> {
       return true;
     }
     if (key == LogicalKeyboardKey.keyF || key == LogicalKeyboardKey.keyK) {
-      _goTo(3);
+      _goTo(_searchIndex);
       return true;
     }
     if (key == LogicalKeyboardKey.keyR) {
@@ -155,6 +159,7 @@ class _AppShellState extends State<AppShell> {
         onEdgeDrag: kIsDesktop ? null : _edgeDrag,
         onEdgeDragEnd: kIsDesktop ? null : _edgeDragEnd,
       ),
+      const RecordingsPage(),
       SearchPage(focusRequests: _searchFocus),
       SettingsPage(onOpenSources: _openSources),
     ];
@@ -162,6 +167,7 @@ class _AppShellState extends State<AppShell> {
       strings.watch,
       strings.favorites,
       strings.guide,
+      strings.recordings,
       strings.search,
       strings.settings,
     ];
@@ -169,6 +175,7 @@ class _AppShellState extends State<AppShell> {
       Icons.live_tv_rounded,
       Icons.star_rounded,
       Icons.calendar_month_rounded,
+      Icons.fiber_manual_record_rounded,
       Icons.search_rounded,
       Icons.tune_rounded,
     ];

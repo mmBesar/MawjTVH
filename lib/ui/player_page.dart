@@ -21,6 +21,8 @@ import '../data/mpv_runtime.dart';
 import '../l10n/strings.dart';
 import 'desktop_player_page.dart';
 import 'widgets/channel_logo.dart';
+import 'widgets/record_now_button.dart';
+import 'widgets/signal_badge.dart';
 import 'widgets/wave.dart';
 
 /// Opens the player for [channel] with a short fade.
@@ -1047,12 +1049,18 @@ class _PlayerPageState extends State<PlayerPage> {
                                 fontSize: 16,
                               ),
                             ),
-                            Text(
-                              '${strings.channel} ${_channel.displayNumber}',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.65),
-                                fontSize: 12,
-                              ),
+                            Row(
+                              children: <Widget>[
+                                Text(
+                                  '${strings.channel} ${_channel.displayNumber}',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.65),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(child: SignalBadge(channel: _channel)),
+                              ],
                             ),
                           ],
                         ),
@@ -1068,6 +1076,8 @@ class _PlayerPageState extends State<PlayerPage> {
                         onPressed: () =>
                             unawaited(state.toggleFavorite(_channel)),
                       ),
+                      RecordNowButton(channel: _channel),
+                      const SizedBox(width: 4),
                       _RoundButton(
                         tooltip: strings.diagnostics,
                         icon: Icons.monitor_heart_outlined,

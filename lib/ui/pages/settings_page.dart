@@ -12,6 +12,8 @@ import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../data/mpv_runtime.dart';
 import '../../l10n/strings.dart';
+import '../../l10n/tvh_strings.dart';
+import 'server_page.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key, required this.onOpenSources});
@@ -164,10 +166,35 @@ class SettingsPage extends StatelessWidget {
                       value: state.activeSource?.name ?? strings.noActiveSource,
                     ),
                     _InfoRow(
-                      icon: Icons.calendar_month_rounded,
-                      label: strings.guideSource,
-                      value: state.xmltvLocation ?? strings.notConfigured,
+                      icon: Icons.router_rounded,
+                      label: strings.server,
+                      value: state.hasContent
+                          ? '${state.serverInfo.name} ${state.serverInfo.version}'
+                              .trim()
+                          : strings.notConfigured,
                     ),
+                    _InfoRow(
+                      icon: state.isAdmin
+                          ? Icons.admin_panel_settings_outlined
+                          : Icons.person_outline_rounded,
+                      label: strings.username,
+                      value: state.hasContent
+                          ? '${state.activeSource?.username ?? ''} · '
+                              '${state.isAdmin ? strings.adminAccount : strings.userAccount}'
+                          : strings.notConfigured,
+                    ),
+                    if (state.isAdmin)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.monitor_heart_outlined),
+                        title: Text(strings.serverStatus),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (context) => const ServerPage(),
+                          ),
+                        ),
+                      ),
                     _InfoRow(
                       icon: Icons.schedule_rounded,
                       label: strings.lastUpdated,

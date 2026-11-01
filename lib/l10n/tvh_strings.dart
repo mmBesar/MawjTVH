@@ -65,8 +65,6 @@ extension TvhStrings on AppStrings {
       ? 'سيُحذف الملف من الخادم نهائيًا. متابعة؟'
       : 'The file is deleted from the server for good. Continue?';
   String get confirm => isArabic ? 'تأكيد' : 'Confirm';
-  String get cancel => isArabic ? 'إلغاء' : 'Cancel';
-  String get refresh => isArabic ? 'تحديث' : 'Refresh';
   String get recordingProblems => isArabic ? 'أخطاء' : 'Errors';
 
   // Signal

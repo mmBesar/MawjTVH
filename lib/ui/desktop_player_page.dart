@@ -16,6 +16,8 @@ import '../l10n/strings.dart';
 import 'player_page.dart';
 import 'widgets/channel_art.dart';
 import 'widgets/channel_logo.dart';
+import 'widgets/record_now_button.dart';
+import 'widgets/signal_badge.dart';
 import 'widgets/wave.dart';
 
 enum _Phase { starting, playing, failed, closed }
@@ -291,6 +293,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
             color: favorite ? colors.accent : null,
           ),
         ),
+        RecordNowButton(channel: _channel, dark: false),
         IconButton.filledTonal(
           tooltip: strings.copyDiagnostics,
           onPressed: () => unawaited(_copyDiagnostics()),
@@ -338,6 +341,8 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
             '${strings.channel} ${_channel.displayNumber}',
             style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
           ),
+          const SizedBox(height: 10),
+          SignalBadge(channel: _channel),
           const SizedBox(height: 22),
           SizedBox(
             width: 160,

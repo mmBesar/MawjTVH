@@ -25,13 +25,13 @@ class AppStrings {
   bool get isArabic => locale.languageCode == 'ar';
 
   String get appName => 'MawjTVH';
-  String get appTagline => isArabic
-      ? 'مشغّل IPTV سلس وخفيف مع دليل برامج'
-      : 'A smooth, light IPTV player with a programme guide';
+  String get appTagline =>
+      isArabic ? 'مشغّل Tvheadend سلس مع دليل وتسجيلات' : 'A Tvheadend client with a smooth guide, recordings and a proper player';
 
   String get channels => isArabic ? 'القنوات' : 'Channels';
   String get guide => isArabic ? 'الدليل' : 'Guide';
-  String get sources => isArabic ? 'المصادر' : 'Sources';
+  String get sources =>
+      isArabic ? 'الخوادم' : 'Servers';
   String get settings => isArabic ? 'الإعدادات' : 'Settings';
 
   String get searchChannels => isArabic ? 'ابحث في القنوات' : 'Search channels';
@@ -39,12 +39,12 @@ class AppStrings {
   String get clearSearch => isArabic ? 'مسح البحث' : 'Clear search';
   String get allGroups => isArabic ? 'كل المجموعات' : 'All groups';
   String get noChannels => isArabic ? 'لا توجد قنوات بعد' : 'No channels yet';
-  String get noChannelsBody => isArabic
-      ? 'أضف مصدرًا لتحميل قائمة التشغيل والدليل.'
-      : 'Add a source to load a playlist and its guide.';
+  String get noChannelsBody =>
+      isArabic ? 'أضف خادم Tvheadend لتحميل قنواته ودليله.' : 'Add a Tvheadend server to load its channels and guide.';
   String get noSearchResults =>
       isArabic ? 'لا توجد قنوات تطابق البحث.' : 'No channels match your search.';
-  String get addSource => isArabic ? 'إضافة مصدر' : 'Add source';
+  String get addSource =>
+      isArabic ? 'إضافة خادم' : 'Add server';
   String get now => isArabic ? 'الآن' : 'Now';
   String get next => isArabic ? 'التالي' : 'Next';
   String get live => isArabic ? 'مباشر' : 'LIVE';
@@ -69,12 +69,10 @@ class AppStrings {
           : '$count programmes';
 
   String get guideEmptyTitle => isArabic ? 'لا توجد بيانات للدليل' : 'No guide data yet';
-  String get guideEmptyBody => isArabic
-      ? 'أضف رابط XMLTV لهذا المصدر ثم حدّث البيانات.'
-      : 'Add an XMLTV URL to this source, then refresh the data.';
-  String get guideNoChannels => isArabic
-      ? 'أضف مصدرًا لعرض جدول البرامج.'
-      : 'Add a source to see the programme schedule.';
+  String get guideEmptyBody =>
+      isArabic ? 'لا توجد بيانات دليل للساعات القادمة. تأكد من عمل مُحمّلات الدليل (EPG grabbers) على الخادم ثم حدّث.' : 'The server has no guide data for the coming hours. Check that the EPG grabbers run on the server, then refresh.';
+  String get guideNoChannels =>
+      isArabic ? 'أضف خادمًا لعرض جدول البرامج.' : 'Add a server to see the programme schedule.';
   String get guideNow => isArabic ? 'الآن' : 'Now';
   String get timelineZoom =>
       isArabic ? 'تكبير الجدول الزمني' : 'Timeline zoom';
@@ -95,14 +93,16 @@ class AppStrings {
 
   String get active => isArabic ? 'نشط' : 'Active';
   String get setActive => isArabic ? 'تعيين كنشط' : 'Set as active';
-  String get activeSource => isArabic ? 'المصدر النشط' : 'Active source';
-  String get noSources => isArabic ? 'لا توجد مصادر' : 'No sources yet';
-  String get noSourcesBody => isArabic
-      ? 'أضف أول مصدر M3U وXMLTV للبدء. يمكنك حفظ عدة مصادر والتبديل بينها.'
-      : 'Add your first M3U and XMLTV source to get started. You can keep several sources and switch between them.';
-  String get sourceName => isArabic ? 'اسم المصدر' : 'Source name';
+  String get activeSource =>
+      isArabic ? 'الخادم النشط' : 'Active server';
+  String get noSources =>
+      isArabic ? 'لا توجد خوادم' : 'No servers yet';
+  String get noSourcesBody =>
+      isArabic ? 'أضف خادم Tvheadend للبدء: العنوان واسم المستخدم وكلمة المرور. يمكنك حفظ عدة خوادم والتبديل بينها.' : 'Add your Tvheadend server to get started: its address, username and password. You can keep several servers and switch between them.';
+  String get sourceName =>
+      isArabic ? 'اسم الخادم' : 'Server name';
   String get sourceNameHint =>
-      isArabic ? 'مثال: تونار المنزل' : 'For example: Home Tunarr';
+      isArabic ? 'مثال: خادم المنزل' : 'For example: Home server';
   String get playlistM3u => isArabic ? 'قائمة التشغيل (M3U)' : 'Playlist (M3U)';
   String get xmltvGuide => isArabic ? 'دليل XMLTV' : 'XMLTV guide';
   String get playlistHelp => isArabic
@@ -116,14 +116,14 @@ class AppStrings {
   String get file => isArabic ? 'ملف' : 'File';
   String get chooseFile => isArabic ? 'اختيار ملف' : 'Choose file';
   String get browse => isArabic ? 'استعراض' : 'Browse';
-  String get allowInsecure => isArabic
-      ? 'السماح بشهادات HTTPS ذاتية التوقيع'
-      : 'Allow self-signed HTTPS certificates';
-  String get allowInsecureHelp => isArabic
-      ? 'فعّل هذا الخيار للخوادم المحلية التي تستخدم شهادة HTTPS ذاتية التوقيع. يُطبَّق على قائمة التشغيل والدليل والشعارات والتشغيل. يُقبل HTTP العادي دائمًا.'
-      : 'Enable for local servers with a self-signed HTTPS certificate. Applies to the playlist, guide, logos and playback. Plain HTTP is always accepted.';
-  String get addSourceTitle => isArabic ? 'إضافة مصدر' : 'Add source';
-  String get editSourceTitle => isArabic ? 'تعديل المصدر' : 'Edit source';
+  String get allowInsecure =>
+      isArabic ? 'السماح بشهادات HTTPS ذاتية التوقيع' : 'Allow self-signed HTTPS certificates';
+  String get allowInsecureHelp =>
+      isArabic ? 'فعّل هذا الخيار للخوادم المحلية التي تستخدم شهادة HTTPS ذاتية التوقيع. يُطبَّق على الاتصال والشعارات والتشغيل. يُقبل HTTP العادي دائمًا.' : 'Enable for local servers with a self-signed HTTPS certificate. Applies to the connection, logos and playback. Plain HTTP is always accepted.';
+  String get addSourceTitle =>
+      isArabic ? 'إضافة خادم' : 'Add server';
+  String get editSourceTitle =>
+      isArabic ? 'تعديل الخادم' : 'Edit server';
   String get sourceAdded => isArabic ? 'تمت إضافة المصدر.' : 'Source added.';
   String get sourceSaved => isArabic ? 'تم حفظ المصدر.' : 'Source saved.';
   String get sourceNameRequired =>
@@ -201,21 +201,16 @@ class AppStrings {
         ThemeFamily.amoled => themeAmoled,
       };
 
-  String get warningNoEpg => isArabic
-      ? 'لا يوجد دليل XMLTV مُهيّأ لهذا المصدر، لذا تظهر أسماء القنوات فقط.'
-      : 'No XMLTV guide is configured for this source, so only channel names are shown.';
-  String get warningPlaylistCache => isArabic
-      ? 'تعذّر الوصول إلى المصدر؛ تُعرض آخر قائمة تشغيل محفوظة.'
-      : 'The source could not be reached; showing the last saved playlist.';
-  String get warningEpgCache => isArabic
-      ? 'تعذّر تحديث الدليل؛ تُعرض النسخة المحفوظة.'
-      : 'The guide could not be refreshed; showing the saved copy.';
-  String get warningEpgUnavailable => isArabic
-      ? 'دليل البرامج غير متاح حاليًا.'
-      : 'The programme guide is unavailable right now.';
-  String get warningEpgEmpty => isArabic
-      ? 'تم تحميل الدليل لكنه لا يحتوي على برامج ضمن النافذة الحالية.'
-      : 'The guide loaded but has no programmes in the current window.';
+  String get warningNoEpg =>
+      isArabic ? 'لا يوجد دليل لهذا الخادم.' : 'This server has no guide.';
+  String get warningPlaylistCache =>
+      isArabic ? 'تعذّر الوصول إلى الخادم؛ تُعرض آخر قنوات محفوظة.' : 'The server could not be reached; showing the last saved channels.';
+  String get warningEpgCache =>
+      isArabic ? 'تعذّر تحديث الدليل؛ تُعرض النسخة المحفوظة.' : 'The guide could not be refreshed; showing the saved copy.';
+  String get warningEpgUnavailable =>
+      isArabic ? 'تعذّر تحميل الدليل من الخادم.' : 'The guide could not be loaded from the server.';
+  String get warningEpgEmpty =>
+      isArabic ? 'اتصلنا بالخادم لكن لا توجد برامج في الدليل ضمن النافذة الحالية.' : 'The server answered but its guide has no programmes in the current window.';
   String warningText(LoadWarning warning) => switch (warning) {
         LoadWarning.noEpgEndpoint => warningNoEpg,
         LoadWarning.playlistFromCache => warningPlaylistCache,
@@ -226,9 +221,8 @@ class AppStrings {
 
   String get playbackError =>
       isArabic ? 'تعذّر تشغيل البث' : 'Playback failed';
-  String get playbackErrorBody => isArabic
-      ? 'تعذّر فتح القناة. تحقق من اتصال الشبكة، ورابط البث، وإعداد الشهادات ذاتية التوقيع.'
-      : 'The channel could not be opened. Check the network connection, the stream URL, and the self-signed certificate setting.';
+  String get playbackErrorBody =>
+      isArabic ? 'تعذّر فتح القناة. تحقق من اتصال الشبكة، ومن أن حسابك يسمح بالمشاهدة، ومن ملف البث وإعداد الشهادات ذاتية التوقيع.' : 'The channel could not be opened. Check the network connection, that your account may watch, the stream profile, and the self-signed certificate setting.';
   String get playbackRetry => isArabic ? 'إعادة المحاولة' : 'Retry playback';
   String get fullScreen => isArabic ? 'ملء الشاشة' : 'Full screen';
   String get play => isArabic ? 'تشغيل' : 'Play';
@@ -395,9 +389,8 @@ class AppStrings {
       ? 'اضغط على النجمة بجانب أي قناة لتظهر هنا.'
       : 'Tap the star next to a channel to keep it here.';
   String get welcomeTitle => isArabic ? 'ابدأ المشاهدة' : 'Tune in';
-  String get welcomeBody => isArabic
-      ? 'أضف قائمة تشغيل M3U ودليل XMLTV. يعمل مع Tunarr وErsatzTV وأي خادم IPTV.'
-      : 'Add an M3U playlist and an XMLTV guide. Works with Tunarr, ErsatzTV and any IPTV server.';
+  String get welcomeBody =>
+      isArabic ? 'أضف خادم Tvheadend الخاص بك. المسؤول يدير كل شيء، والمستخدم العادي يشاهد ويسجّل حسب صلاحيات حسابه.' : 'Add your Tvheadend server. Admins see everything; normal users watch and record as their account allows.';
   String get searchHint =>
       isArabic ? 'قناة أو برنامج' : 'Channel or programme';
   String get searchEmptyTitle =>

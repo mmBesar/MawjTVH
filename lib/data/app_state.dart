@@ -13,6 +13,9 @@ import 'tvh_client.dart';
 import 'tvh_loader.dart';
 import 'tvh_models.dart';
 
+/// Prefix of the synthetic channel id used to play a recording in the player.
+const String kRecordingIdPrefix = 'rec:';
+
 /// Central application state: persisted sources and settings, the currently
 /// loaded channel/EPG snapshot, and a lightweight ticker so "now playing"
 /// information stays current without reopening the guide.
@@ -227,6 +230,10 @@ class AppState extends ChangeNotifier {
 
   /// Remembers [channel] as the most recently watched one.
   Future<void> markWatched(Channel channel) async {
+    // A recording played through the player is not a channel to come back to.
+    if (channel.id.startsWith(kRecordingIdPrefix)) {
+      return;
+    }
     final next = <String>[
       channel.id,
       ..._recents.where((id) => id != channel.id),
@@ -518,6 +525,25 @@ class AppState extends ChangeNotifier {
       return null;
     }
   }
+
+  /// A synthetic channel that plays [recording] in the normal player.
+  Channel? recordingAsChannel(TvhRecording recording) {
+    final url = recordingUrl(recording);
+    final source = liveSource;
+    if (url == null || source == null) {
+      return null;
+    }
+    return Channel(
+      id: '$kRecordingIdPrefix${recording.uuid}',
+      sourceId: source.id,
+      name: recording.title,
+      number: '',
+      url: url,
+      group: recordingsGroup,
+    );
+  }
+
+  static const String recordingsGroup = 'Recordings';
 
   /// Address of a finished recording's file, with the login in the URL.
   String? recordingUrl(TvhRecording recording) {
