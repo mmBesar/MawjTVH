@@ -29,13 +29,13 @@ PERMISSIONS = (
 DESKTOP_FILE = """[Desktop Entry]
 Type=Application
 Name=MawjTVH
-GenericName=IPTV Client
-Comment=Bidirectional IPTV client with a 12-hour guide
+GenericName=Tvheadend Client
+Comment=Tvheadend client with guide, recordings and signal info
 Exec=mawjtvh
 Icon=mawjtvh
 Terminal=false
 Categories=AudioVideo;Video;Player;TV;
-Keywords=iptv;m3u;xmltv;tv;stream;
+Keywords=tvheadend;tv;dvr;epg;stream;
 StartupWMClass=mawjtvh
 """
 

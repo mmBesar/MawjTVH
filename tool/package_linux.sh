@@ -277,10 +277,10 @@ Maintainer: mmbesar <mbesar@proton.me>
 Homepage: https://github.com/mmbesar/MawjTVH
 Depends: libgtk-3-0t64 | libgtk-3-0, libmpv2 | libmpv1, libstdc++6, libblkid1, liblzma5
 Recommends: fonts-noto-core, mpv
-Description: Bidirectional IPTV client for Android and Linux
- MawjTVH plays M3U playlists with an XMLTV guide, a 12-hour timeline and
- first-class Arabic/English bidirectional text. It supports Catppuccin,
- AMOLED and system themes, multiple sources and self-signed HTTPS.
+Description: Tvheadend client for Android and Linux
+ MawjTVH is a Tvheadend client: live TV, a timeline guide, recordings,
+ signal numbers and first-class Arabic/English text. It supports Catppuccin,
+ AMOLED and system themes, several servers and self-signed HTTPS.
 EOF
 
   dpkg-deb --build --root-owner-group "$deb_root" \
@@ -303,7 +303,7 @@ build_rpm() {
 Name:           mawjtvh
 Version:        $VERSION
 Release:        1
-Summary:        Bidirectional IPTV client with a 12-hour guide
+Summary:        Tvheadend client with guide and recordings
 License:        GPL-3.0-or-later
 URL:            https://github.com/mmbesar/MawjTVH
 BuildArch:      $RPM_ARCH
@@ -312,9 +312,9 @@ Requires:       mpv-libs
 Recommends:     mpv
 
 %description
-MawjTVH plays M3U playlists with an XMLTV guide, a 12-hour timeline and
-first-class Arabic/English bidirectional text. It supports Catppuccin,
-AMOLED and system themes, multiple sources and self-signed HTTPS.
+MawjTVH is a Tvheadend client: live TV, a timeline guide, recordings,
+signal numbers and first-class Arabic/English text. It supports Catppuccin,
+AMOLED and system themes, several servers and self-signed HTTPS.
 
 %prep
 

@@ -1,50 +1,32 @@
 # MawjTVH
 
-**MawjTVH** (موجة, "a wave") is a fast, light IPTV player for Android and Linux.
-It reads M3U playlists and XMLTV guides and is tested against **Tunarr** and
-**ErsatzTV**. Arabic and English with full RTL, Catppuccin themes plus AMOLED.
+**MawjTVH** (موجة, "a wave") is a Tvheadend client for Android and Linux, built
+on the look, player and Arabic/English RTL work of Mawjac. Catppuccin themes
+plus AMOLED.
+
+It talks to Tvheadend's HTTP API (works over plain HTTP, HTTPS, reverse proxies
+and web roots). **The server decides what each account may do**: admins see
+signal and server status, normal users watch and record as their account allows.
 
 ## What it does
 
-- **Watch**: a hero strip to resume, filter pills for All, Favorites and groups, live "now" progress on every channel.
-- **Guide**: a 12-hour timeline with a now line, optional favorites-only view.
-- **Search**: channels and programmes, with Arabic-aware matching (diacritics, alef and ya/ta-marbuta variants).
-- **Player**: in-place channel zapping, swipe for brightness and volume, native window fullscreen on desktop, stall detection with copyable diagnostics.
-- **Themes**: Mawj (dark), Foam (light), Catppuccin Latte/Frappé/Macchiato/Mocha, AMOLED, and system colours.
+- **Watch**: channels grouped by Tvheadend channel tags, live "now" progress, favorites, recents.
+- **Guide**: timeline guide (12 to 72 h) from the server's EPG, with episode, year, rating and credits in the programme sheet.
+- **Recordings**: upcoming, recorded and failed; play (even while recording), stop, cancel, delete. Record a programme, a whole series, or "record now" for 30 min to 4 h from the player.
+- **Signal**: SNR and SS next to the channel in the player bar (admin accounts; from the server's tuner status).
+- **Server status** (admins): tuners, running streams, connections.
+- **Stream profile**: pick `pass`, `matroska` or a transcoding profile per server.
+- **Search**: channels and programmes, with Arabic-aware matching.
+- **Player**: libmpv on Android; a native mpv window on Linux (Wayland-safe, GPU decoding).
 
-Favorites and recents survive playlist reordering because channel ids come from `tvg-id`, `channel-id` or name rather than position.
+## Notes
 
-## ErsatzTV note
-
-ErsatzTV's HLS master advertises a WebVTT subtitle rendition. media_kit's default
-ffmpeg options (`strict=experimental`) make ffmpeg read only that rendition and
-never open the video. MawjTVH sets its own demuxer options without that flag.
-
-## Desktop playback
-
-On Linux, MawjTVH plays each channel in its own native **mpv** window. mpv cannot
-be embedded inside another window on Wayland, and its render API can freeze on
-some Mesa setups, so a separate window gives GPU decoding, real compositor
-fullscreen and mpv's own on-screen controls. MawjTVH stays open as a remote:
-now/next, channel switching, favorites.
-
-Settings lists the hardware decoders your mpv reports (VA-API, NVDEC, Vulkan…),
-with a software fallback. The AppImage ships its own mpv; with a DEB/RPM or a
-source build mpv is taken from `PATH`, or from `MAWJTVH_MPV=/path/to/mpv`. If no
-mpv is found, the built-in renderer is used.
+- Login uses HTTP Basic. Tvheadend must allow plain or "both" authentication (digest-only is not supported yet).
+- Passwords are stored in the app's preferences on the device, not encrypted.
+- Signal numbers over the HTSP port for non-admin accounts are planned, not done.
 
 ## Build
 
-See [docs/BUILDING.md](docs/BUILDING.md) and [docs/SOURCES.md](docs/SOURCES.md).
-CI builds an Android arm64 APK and Linux amd64/arm64 bundles.
+See [docs/BUILDING.md](docs/BUILDING.md). CI builds an Android arm64 APK and Linux amd64/arm64 bundles.
 
-```bash
-tool/bootstrap.sh
-flutter run -d linux
-```
-
-Linux hardware decoding is off by default; try `MAWJTVH_HWDEC=auto-copy-safe`.
-
-## Licence
-
-GPL-3.0-or-later. See [LICENSE](LICENSE).
+Licence: GPL-3.0-or-later.

@@ -8,7 +8,7 @@ import 'package:mawjtvh/data/tvh_models.dart';
 
 typedef Route = TvhResponse Function(String method, Uri uri);
 
-TvhResponse json(Object body, {int status = 200}) =>
+TvhResponse jsonOk(Object body, {int status = 200}) =>
     TvhResponse(status, utf8.encode(jsonEncode(body)));
 
 TvhResponse plain(int status, {String? location}) =>
@@ -59,7 +59,7 @@ void main() {
   group('permissions', () {
     test('an account without admin rights is a normal user', () async {
       final client = clientWith(<String, Route>{
-        '/api/config/capabilities': (_, _) => json(<String>['linuxdvb']),
+        '/api/config/capabilities': (_, _) => jsonOk(<String>['linuxdvb']),
         '/api/config/load': (_, _) => plain(403),
       });
       final permissions = await client.probe();
@@ -68,8 +68,8 @@ void main() {
 
     test('an admin account is detected', () async {
       final client = clientWith(<String, Route>{
-        '/api/config/capabilities': (_, _) => json(<String>[]),
-        '/api/config/load': (_, _) => json(<String, Object>{'entries': <Object>[]}),
+        '/api/config/capabilities': (_, _) => jsonOk(<String>[]),
+        '/api/config/load': (_, _) => jsonOk(<String, Object>{'entries': <Object>[]}),
       });
       expect((await client.probe()).admin, isTrue);
     });
@@ -99,7 +99,7 @@ void main() {
 
     test('the login travels as a Basic header', () async {
       final transport = FakeTransport(<String, Route>{
-        '/api/config/capabilities': (_, _) => json(<String>[]),
+        '/api/config/capabilities': (_, _) => jsonOk(<String>[]),
         '/api/config/load': (_, _) => plain(403),
       });
       await TvhClient(kSource, transport: transport).probe();
@@ -290,7 +290,7 @@ void main() {
           final start = int.parse(uri.queryParameters['start']!);
           final limit = int.parse(uri.queryParameters['limit']!);
           final end = (start + limit).clamp(0, all.length).toInt();
-          return json(<String, Object>{
+          return jsonOk(<String, Object>{
             'entries': all.sublist(start.clamp(0, all.length).toInt(), end),
             'total': all.length,
           });
@@ -365,7 +365,7 @@ void main() {
 
     test('the default recording profile is the one with an empty name', () async {
       final client = clientWith(<String, Route>{
-        '/api/dvr/config/grid': (_, _) => json(<String, Object>{
+        '/api/dvr/config/grid': (_, _) => jsonOk(<String, Object>{
               'entries': <Object>[
                 <String, String>{'uuid': 'other', 'name': 'Other'},
                 <String, String>{'uuid': 'cfg-default', 'name': ''},
@@ -377,12 +377,12 @@ void main() {
 
     test('recording an event posts the profile and event id', () async {
       final transport = FakeTransport(<String, Route>{
-        '/api/dvr/config/grid': (_, _) => json(<String, Object>{
+        '/api/dvr/config/grid': (_, _) => jsonOk(<String, Object>{
               'entries': <Object>[
                 <String, String>{'uuid': 'cfg-default', 'name': ''},
               ],
             }),
-        '/api/dvr/entry/create_by_event': (_, _) => json(<String, Object>{}),
+        '/api/dvr/entry/create_by_event': (_, _) => jsonOk(<String, Object>{}),
       });
       await TvhClient(kSource, transport: transport).recordEvent(42);
       expect(transport.log.last, 'POST /api/dvr/entry/create_by_event');
@@ -446,7 +446,7 @@ void main() {
 
     test('signalFor joins the tuner and the subscription', () async {
       final client = clientWith(<String, Route>{
-        '/api/status/inputs': (_, _) => json(<String, Object>{
+        '/api/status/inputs': (_, _) => jsonOk(<String, Object>{
               'entries': <Object>[
                 <String, Object>{
                   'input': 'Tuner A',
@@ -459,7 +459,7 @@ void main() {
                 },
               ],
             }),
-        '/api/status/subscriptions': (_, _) => json(<String, Object>{
+        '/api/status/subscriptions': (_, _) => jsonOk(<String, Object>{
               'entries': <Object>[
                 <String, Object>{
                   'channel': 'News 24',
