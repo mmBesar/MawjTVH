@@ -1,0 +1,10 @@
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ttf binary
+*.AppImage binary
+*.deb binary
+*.rpm binary
+
+*.sh text eol=lf

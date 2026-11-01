@@ -1,0 +1,18 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - dist/**
+  errors:
+    deprecated_member_use_from_same_package: ignore
+
+linter:
+  rules:
+    always_declare_return_types: true
+    avoid_print: true
+    directives_ordering: true
+    prefer_final_locals: true
+    prefer_single_quotes: false
+    unawaited_futures: true
+    use_super_parameters: true

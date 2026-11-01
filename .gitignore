@@ -1,0 +1,48 @@
+# Flutter / Dart
+.dart_tool/
+.flutter/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+coverage/
+pubspec.lock
+
+# Generated platform shells.
+# `tool/bootstrap.sh` creates these from the pinned Flutter SDK on demand.
+/android/
+/linux/
+/ios/
+/macos/
+/windows/
+/web/
+.metadata
+
+# IDE and OS noise
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+
+# Local release output
+dist/
+.build/
+*.deb
+*.rpm
+*.AppImage
+*.apk
+*.aab
+
+# Python bytecode from tool/ scripts
+__pycache__/
+*.pyc
+
+# Local AI agent memory / handoff notes
+/AGENTS.md
+
+# Notes and review files
+AGENTS.md
+CLAUDE.md
+notes/

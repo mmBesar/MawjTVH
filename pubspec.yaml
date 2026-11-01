@@ -1,0 +1,50 @@
+name: mawjtvh
+description: A bidirectional IPTV client for Android and Linux with a 12-hour XMLTV guide.
+publish_to: "none"
+version: 0.2.0+2
+
+environment:
+  sdk: ">=3.13.0 <4.0.0"
+  flutter: ">=3.47.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Playback (libmpv on both Android and Linux).
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_video: ^1.0.7
+
+  # State, storage and platform integration.
+  provider: ^6.1.5
+  shared_preferences: ^2.5.6
+  path_provider: ^2.1.6
+  file_selector: ^1.1.0
+  # 2.x depends on package:material_ui, which defines a second ColorScheme
+  # type that is incompatible with package:flutter/material.dart.
+  dynamic_color: ">=1.9.0 <2.0.0"
+  screen_brightness: ^2.1.11
+  wakelock_plus: ^1.8.2
+
+  # Parsing and small utilities.
+  xml: ^6.5.0
+  path: ^1.9.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/branding/mawjtvh_icon.png
+
+  fonts:
+    - family: MawjArabic
+      fonts:
+        - asset: assets/fonts/NotoSansArabic.ttf
