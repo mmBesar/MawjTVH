@@ -235,12 +235,20 @@ bundle_runtime_libraries() {
 
 bundle_runtime_libraries
 
+# AppStream metadata, with this build's version and today's date filled in.
+write_metainfo() {
+  sed -e "s/@VERSION@/$VERSION/" -e "s/@DATE@/$(date -u +%F)/" \
+    "$ROOT/packaging/linux/mawjtvh.metainfo.xml" > "$1"
+  chmod 644 "$1"
+}
+
 WORK="$ROOT/build/package/$DEB_ARCH"
 ROOTFS="$WORK/rootfs"
 rm -rf "$WORK"
 mkdir -p "$OUT" "$ROOTFS/opt/mawjtvh" \
   "$ROOTFS/usr/bin" \
   "$ROOTFS/usr/share/applications" \
+  "$ROOTFS/usr/share/metainfo" \
   "$ROOTFS/usr/share/icons/hicolor/512x512/apps"
 
 cp -a "$BUNDLE/." "$ROOTFS/opt/mawjtvh/"
@@ -248,6 +256,7 @@ chmod +x "$ROOTFS/opt/mawjtvh/mawjtvh"
 ln -sfn /opt/mawjtvh/mawjtvh "$ROOTFS/usr/bin/mawjtvh"
 install -m644 "$ICON" "$ROOTFS/usr/share/icons/hicolor/512x512/apps/mawjtvh.png"
 install -m644 "$DESKTOP" "$ROOTFS/usr/share/applications/mawjtvh.desktop"
+write_metainfo "$ROOTFS/usr/share/metainfo/mawjtvh.appdata.xml"
 
 echo "Staged $(du -sh "$ROOTFS/opt/mawjtvh" | cut -f1) application bundle for $DEB_ARCH."
 
@@ -329,6 +338,7 @@ cp -a "$ROOTFS/." %{buildroot}/
 /opt/mawjtvh
 /usr/bin/mawjtvh
 /usr/share/applications/mawjtvh.desktop
+/usr/share/metainfo/mawjtvh.appdata.xml
 /usr/share/icons/hicolor/512x512/apps/mawjtvh.png
 EOF
 
@@ -352,11 +362,13 @@ build_appimage() {
   rm -rf "$appdir"
   mkdir -p "$appdir/usr/bin" \
     "$appdir/usr/share/applications" \
+    "$appdir/usr/share/metainfo" \
     "$appdir/usr/share/icons/hicolor/512x512/apps"
 
   cp -a "$BUNDLE/." "$appdir/usr/bin/"
   install -m644 "$ICON" "$appdir/usr/share/icons/hicolor/512x512/apps/mawjtvh.png"
   install -m644 "$DESKTOP" "$appdir/usr/share/applications/mawjtvh.desktop"
+  write_metainfo "$appdir/usr/share/metainfo/mawjtvh.appdata.xml"
   install -m644 "$ICON" "$appdir/mawjtvh.png"
   install -m644 "$DESKTOP" "$appdir/mawjtvh.desktop"
   ln -sfn mawjtvh.png "$appdir/.DirIcon"
