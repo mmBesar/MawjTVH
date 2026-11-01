@@ -8,7 +8,7 @@ import 'package:flutter/painting.dart';
 import 'package:path_provider/path_provider.dart';
 
 const String kMawjUserAgent =
-    'MawjTVH/0.1.0 (+https://github.com/mmBesar/MawjTVH)';
+    'MawjTVH/0.1.1 (+https://github.com/mmBesar/MawjTVH)';
 
 /// Every poster and logo owns a socket while it downloads. A guide built from
 /// a full XMLTV file can ask for thousands of images at once, and that burst

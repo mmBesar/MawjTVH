@@ -150,7 +150,7 @@ class StreamRecorder {
           );
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 15)
-      ..userAgent = 'MawjTVH/0.1.0';
+      ..userAgent = 'MawjTVH/0.1.1';
     if (allowInsecure) {
       client.badCertificateCallback = (_, _, _) => true;
     }
