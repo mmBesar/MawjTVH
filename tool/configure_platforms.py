@@ -87,6 +87,49 @@ def patch_android_manifest() -> None:
     print("  patched AndroidManifest.xml")
 
 
+SIGNING_HEADER = """import java.io.FileInputStream
+import java.util.Properties
+
+// Release signing: read android/key.properties when it exists (CI writes it
+// from repository secrets). Without it the build falls back to the debug key,
+// so local builds still work, but such an APK cannot update a signed one.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("key.properties")
+    if (file.exists()) {
+        FileInputStream(file).use { load(it) }
+    }
+}
+
+"""
+
+SIGNING_CONFIGS = """    signingConfigs {
+        create("release") {
+            if (keystoreProperties.containsKey("keyAlias")) {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
+    }
+
+"""
+
+
+def add_release_signing_kts(text: str) -> str:
+    if "keystoreProperties" in text:
+        return text
+    text = SIGNING_HEADER + text
+    text = text.replace("    buildTypes {", SIGNING_CONFIGS + "    buildTypes {", 1)
+    text = re.sub(
+        r'signingConfig\s*=\s*signingConfigs\.getByName\("debug"\)',
+        'signingConfig = if (keystoreProperties.containsKey("keyAlias")) '
+        'signingConfigs.getByName("release") else signingConfigs.getByName("debug")',
+        text,
+    )
+    return text
+
+
 def patch_android_gradle() -> None:
     kts = ANDROID / "app" / "build.gradle.kts"
     groovy = ANDROID / "app" / "build.gradle"
@@ -102,6 +145,7 @@ def patch_android_gradle() -> None:
             "minSdk = 24",
             text,
         )
+        text = add_release_signing_kts(text)
         write(kts, text)
         print("  patched android/app/build.gradle.kts")
     elif groovy.exists():

@@ -20,6 +20,7 @@ import '../widgets/source_switcher.dart';
 import '../widgets/warnings_panel.dart';
 import '../widgets/wave.dart';
 import 'channel_guide_page.dart';
+import 'search_page.dart';
 
 /// The home screen: what is on now, then every channel.
 class WatchPage extends StatefulWidget {
@@ -37,6 +38,7 @@ class _WatchPageState extends State<WatchPage> {
   static const String _favorites = '\u0000fav';
 
   String _filter = _all;
+  bool _favoritesActive = false;
 
   List<Channel> _heroChannels(AppState state) {
     final seen = <String>{};
@@ -62,12 +64,7 @@ class _WatchPageState extends State<WatchPage> {
     if (_filter == _favorites) {
       return state.favorites;
     }
-    if (_filter == _all) {
-      return state.channels;
-    }
-    return state.channels
-        .where((channel) => channel.group == _filter)
-        .toList(growable: false);
+    return state.filteredChannels;
   }
 
   @override
@@ -83,14 +80,11 @@ class _WatchPageState extends State<WatchPage> {
       return _Welcome(onAdd: widget.onOpenSources);
     }
 
-    if (_filter != _all &&
-        _filter != _favorites &&
-        !state.groups.contains(_filter)) {
-      _filter = _all;
+    // The group is shared with the Guide; favourites stay local to Watch.
+    if (_favoritesActive && state.favorites.isEmpty) {
+      _favoritesActive = false;
     }
-    if (_filter == _favorites && state.favorites.isEmpty) {
-      _filter = _all;
-    }
+    _filter = _favoritesActive ? _favorites : (state.groupFilter ?? _all);
 
     final channels = _visible(state);
     final loadingFirst = state.isLoading && state.channels.isEmpty;
@@ -117,6 +111,7 @@ class _WatchPageState extends State<WatchPage> {
                     sourceName: state.activeSource?.name ?? '',
                     loading: state.isLoading,
                     onRefresh: state.refresh,
+                    onSearch: () => SearchPage.open(context, SearchScope.channels),
                     onOpenSources: () => showSourceSwitcher(
                       context,
                       onManage: widget.onOpenSources,
@@ -159,7 +154,12 @@ class _WatchPageState extends State<WatchPage> {
                     favoritesKey: _favorites,
                     groups: state.groups,
                     hasFavorites: state.favorites.isNotEmpty,
-                    onSelected: (value) => setState(() => _filter = value),
+                    onSelected: (value) {
+                      setState(() => _favoritesActive = value == _favorites);
+                      if (value != _favorites) {
+                        state.setGroupFilter(value == _all ? null : value);
+                      }
+                    },
                   ),
                 ),
               if (loadingFirst)
@@ -291,6 +291,7 @@ class _Header extends StatelessWidget {
     required this.loading,
     required this.onRefresh,
     required this.onOpenSources,
+    required this.onSearch,
     required this.padding,
   });
 
@@ -298,6 +299,7 @@ class _Header extends StatelessWidget {
   final bool loading;
   final Future<void> Function() onRefresh;
   final VoidCallback onOpenSources;
+  final VoidCallback onSearch;
   final double padding;
 
   @override
@@ -341,6 +343,11 @@ class _Header extends StatelessWidget {
                 backgroundColor: colors.surface0.withValues(alpha: 0.6),
               ),
             ),
+          IconButton(
+            tooltip: strings.searchChannels,
+            onPressed: onSearch,
+            icon: const Icon(Icons.search_rounded),
+          ),
           IconButton(
             tooltip: strings.refresh,
             onPressed: loading ? null : () => unawaited(onRefresh()),

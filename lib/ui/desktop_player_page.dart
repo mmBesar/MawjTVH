@@ -10,9 +10,11 @@ import '../core/app_info.dart';
 import '../core/bidi.dart';
 import '../core/theme.dart';
 import '../data/app_state.dart';
+import '../data/local_recorder.dart';
 import '../data/models.dart';
 import '../data/mpv_runtime.dart';
 import '../l10n/strings.dart';
+import '../l10n/tvh_strings.dart';
 import 'player_page.dart';
 import 'widgets/channel_art.dart';
 import 'widgets/channel_logo.dart';
@@ -49,6 +51,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   int _generation = 0;
   MpvSession? _lastSession;
   DateTime _startedAt = DateTime.now();
+  bool _localRecording = false;
 
   @override
   void initState() {
@@ -150,10 +153,56 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     _switchTo(list[((from + delta) % list.length + list.length) % list.length]);
   }
 
+  Future<void> _stopLocalRecording({bool silent = false}) async {
+    if (!_localRecording) {
+      return;
+    }
+    _localRecording = false;
+    await _session?.command(const <Object>['set_property', 'stream-record', '']);
+    if (mounted) {
+      setState(() {});
+      if (!silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.strings.stopLocalRecording)),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleLocalRecording() async {
+    if (_localRecording) {
+      await _stopLocalRecording();
+      return;
+    }
+    final session = _session;
+    if (session == null || _phase != _Phase.playing) {
+      return;
+    }
+    final state = context.read<AppState>();
+    final strings = context.strings;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final path = await LocalRecordings.newPath(
+        state.settings.recordDir,
+        _channel.name,
+      );
+      await session.command(<Object>['set_property', 'stream-record', path]);
+      if (mounted) {
+        setState(() => _localRecording = true);
+      }
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(strings.localRecordingStarted(path))));
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text('$error')));
+    }
+  }
+
   Future<void> _switchTo(Channel channel) async {
     if (channel.id == _channel.id && _phase == _Phase.playing) {
       return;
     }
+    await _stopLocalRecording(silent: true);
     setState(() {
       _channel = channel;
       _decoder = null;
@@ -293,7 +342,14 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
             color: favorite ? colors.accent : null,
           ),
         ),
-        RecordNowButton(channel: _channel, dark: false),
+        if (!isSyntheticChannel(_channel))
+          RecordNowButton(channel: _channel, dark: false),
+        if (!isSyntheticChannel(_channel))
+          LocalRecordButton(
+            recording: _localRecording,
+            dark: false,
+            onPressed: () => unawaited(_toggleLocalRecording()),
+          ),
         IconButton.filledTonal(
           tooltip: strings.copyDiagnostics,
           onPressed: () => unawaited(_copyDiagnostics()),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/network_image.dart';
 import '../../core/theme.dart';
+import '../../data/app_state.dart';
 import '../../data/models.dart';
 
 class ChannelLogo extends StatelessWidget {
@@ -27,7 +29,11 @@ class ChannelLogo extends StatelessWidget {
     // otherwise exhaust the image cache (or Android's memory budget) until
     // previously loaded logos start failing to decode.
     final pixels = (size * MediaQuery.devicePixelRatioOf(context)).ceil();
-    return ClipRRect(
+    // A red dot while the server is recording this channel.
+    final recording = context.select<AppState, bool>(
+      (state) => state.isRecordingChannel(channel),
+    );
+    final logo = ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: Container(
         width: size,
@@ -52,6 +58,29 @@ class ChannelLogo extends StatelessWidget {
                 },
               ),
       ),
+    );
+    if (!recording) {
+      return logo;
+    }
+    final dot = (size * 0.3).clamp(9.0, 16.0).toDouble();
+    return Stack(
+      clipBehavior: Clip.none,
+      children: <Widget>[
+        logo,
+        PositionedDirectional(
+          top: -dot * 0.25,
+          end: -dot * 0.25,
+          child: Container(
+            width: dot,
+            height: dot,
+            decoration: BoxDecoration(
+              color: const Color(0xFFED3B4B),
+              shape: BoxShape.circle,
+              border: Border.all(color: colors.surface0, width: 2),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

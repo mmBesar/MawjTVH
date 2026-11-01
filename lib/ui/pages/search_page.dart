@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -9,6 +8,7 @@ import '../../core/theme.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../l10n/strings.dart';
+import '../../l10n/tvh_strings.dart';
 import '../player_page.dart';
 import '../widgets/channel_logo.dart';
 import '../widgets/channel_row.dart';
@@ -17,13 +17,22 @@ import '../widgets/programme_poster.dart';
 import '../widgets/programme_sheet.dart';
 import 'channel_guide_page.dart';
 
-/// Finds channels by name, number or group, and programmes by title,
-/// sub-title or category.
-class SearchPage extends StatefulWidget {
-  const SearchPage({super.key, this.focusRequests});
+/// What a search looks through. Each page opens the scope that fits it, so
+/// there is no separate "search" tab to remember.
+enum SearchScope { channels, programmes }
 
-  /// Each change moves keyboard focus into the search box.
-  final ValueListenable<int>? focusRequests;
+/// Finds channels by name, number or group, or programmes by title,
+/// sub-title or category, depending on [scope].
+class SearchPage extends StatefulWidget {
+  const SearchPage({super.key, required this.scope});
+
+  final SearchScope scope;
+
+  static Future<void> open(BuildContext context, SearchScope scope) {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (context) => SearchPage(scope: scope)),
+    );
+  }
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -37,10 +46,6 @@ class _SearchPageState extends State<SearchPage> {
   @override
   void initState() {
     super.initState();
-    widget.focusRequests?.addListener(_focusRequested);
-  }
-
-  void _focusRequested() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _focus.requestFocus();
@@ -50,7 +55,6 @@ class _SearchPageState extends State<SearchPage> {
 
   @override
   void dispose() {
-    widget.focusRequests?.removeListener(_focusRequested);
     _focus.dispose();
     _controller.dispose();
     super.dispose();
@@ -79,8 +83,12 @@ class _SearchPageState extends State<SearchPage> {
         body: strings.searchEmptyBody,
       );
     } else {
-      final channels = state.searchChannels(query);
-      final programmes = state.searchProgrammes(query);
+      final channels = widget.scope == SearchScope.channels
+          ? state.searchChannels(query)
+          : const <Channel>[];
+      final programmes = widget.scope == SearchScope.programmes
+          ? state.searchProgrammes(query)
+          : const <ProgrammeHit>[];
       if (channels.isEmpty && programmes.isEmpty) {
         body = EmptyState(
           icon: Icons.search_off_rounded,
@@ -125,12 +133,20 @@ class _SearchPageState extends State<SearchPage> {
       }
     }
 
-    return SafeArea(
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          widget.scope == SearchScope.channels
+              ? strings.searchChannelsTitle
+              : strings.searchGuideTitle,
+        ),
+      ),
+      body: SafeArea(
       bottom: false,
       child: Column(
         children: <Widget>[
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
             child: TextField(
               controller: _controller,
               focusNode: _focus,
@@ -153,6 +169,7 @@ class _SearchPageState extends State<SearchPage> {
           ),
           Expanded(child: body),
         ],
+      ),
       ),
     );
   }

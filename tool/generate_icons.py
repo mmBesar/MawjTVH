@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draws the MawjTVH icon (a wave that turns from white to orange) and writes
+"""Draws the MawjTVH icon (a wave on teal that turns from white to amber, over a broadcast signal) and writes
 the SVG plus every PNG size the Android and Linux builds need.
 
 Needs Pillow only:  pip install pillow
@@ -15,10 +15,11 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parent.parent
 BRANDING = ROOT / "assets" / "branding"
 
-ABYSS = (6, 11, 30)
-SWELL = (24, 40, 92)
-FOAM = (242, 246, 252)
-CREST = (255, 138, 61)
+ABYSS = (3, 22, 30)
+SWELL = (10, 96, 104)
+FOAM = (240, 250, 250)
+CREST = (255, 196, 64)
+SIGNAL_CX, SIGNAL_CY = 512, 800
 
 SIZE = 1024  # design grid
 
@@ -26,7 +27,7 @@ SIZE = 1024  # design grid
 def wave_points(steps: int = 220):
     """Points of one and a half sine periods across the tile."""
     left, right = 170, 854
-    mid = 520
+    mid = 430
     points = []
     for i in range(steps + 1):
         t = i / steps
@@ -75,9 +76,18 @@ def render(size: int) -> Image.Image:
         r = width / 2
         draw.ellipse((p1[0] - r, p1[1] - r, p1[0] + r, p1[1] + r), fill=color)
 
-    # Small "live" dot under the wave.
-    cx, cy, r = 512 * k, 790 * k, 34 * k
+    # Broadcast signal under the wave: a dot and two arcs.
+    cx, cy, r = SIGNAL_CX * k, SIGNAL_CY * k, 36 * k
     draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=CREST + (255,))
+    for radius in (95, 160):
+        rr = radius * k
+        draw.arc(
+            (cx - rr, cy - rr, cx + rr, cy + rr),
+            start=225,
+            end=315,
+            fill=FOAM + (255,),
+            width=int(26 * k),
+        )
 
     return img.resize((size, size), Image.LANCZOS)
 
@@ -87,6 +97,12 @@ def write_svg(path: Path) -> None:
     n = len(points)
     first = " ".join(f"{x:.1f},{y:.1f}" for x, y in points[: int(n * 0.55)])
     second = " ".join(f"{x:.1f},{y:.1f}" for x, y in points[int(n * 0.55) - 1 :])
+    arcs = "\n".join(
+        f'  <path d="M {SIGNAL_CX - r * math.sin(math.pi / 4):.1f} {SIGNAL_CY - r * math.cos(math.pi / 4):.1f} '
+        f'A {r} {r} 0 0 1 {SIGNAL_CX + r * math.sin(math.pi / 4):.1f} {SIGNAL_CY - r * math.cos(math.pi / 4):.1f}" '
+        f'fill="none" stroke="rgb{FOAM}" stroke-width="26" stroke-linecap="butt"/>'
+        for r in (95, 160)
+    )
     svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {SIZE} {SIZE}" width="512" height="512">
   <defs>
     <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
@@ -97,7 +113,8 @@ def write_svg(path: Path) -> None:
   <rect width="{SIZE}" height="{SIZE}" rx="230" fill="url(#tile)"/>
   <polyline points="{first}" fill="none" stroke="rgb{FOAM}" stroke-width="70" stroke-linecap="round" stroke-linejoin="round"/>
   <polyline points="{second}" fill="none" stroke="rgb{CREST}" stroke-width="70" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="512" cy="790" r="34" fill="rgb{CREST}"/>
+  <circle cx="{SIGNAL_CX}" cy="{SIGNAL_CY}" r="36" fill="rgb{CREST}"/>
+{arcs}
 </svg>
 """
     path.write_text(svg, encoding="utf-8")

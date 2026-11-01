@@ -86,4 +86,42 @@ extension TvhStrings on AppStrings {
       ? 'هذه الشاشة للمسؤولين فقط.'
       : 'This screen is for admins only.';
   String get version => isArabic ? 'الإصدار' : 'Version';
+
+  // Local recording
+  String get recordOnServer => isArabic ? 'تسجيل على الخادم' : 'Record on server';
+  String get recordOnDevice => isArabic ? 'تسجيل على هذا الجهاز' : 'Record to this device';
+  String get stopLocalRecording =>
+      isArabic ? 'إيقاف التسجيل على الجهاز' : 'Stop recording to device';
+  String get localTab => isArabic ? 'على الجهاز' : 'On device';
+  String localRecordingStarted(String path) =>
+      isArabic ? 'يُسجَّل في: $path' : 'Recording to: $path';
+  String localRecordingSaved(String path) =>
+      isArabic ? 'تم الحفظ: $path' : 'Saved: $path';
+  String get noLocalRecordings => isArabic
+      ? 'لا توجد تسجيلات على هذا الجهاز بعد. اضغط زر الحفظ أثناء المشاهدة.'
+      : 'Nothing recorded on this device yet. Press the save button while watching.';
+  String get recordFolder => isArabic ? 'مجلد التسجيل' : 'Recording folder';
+  String get recordFolderHelp => isArabic
+      ? 'يُحفظ هنا ما تسجّله على هذا الجهاز. اتركه فارغًا للمجلد الافتراضي.'
+      : 'Recordings made on this device are saved here. Leave empty for the default folder.';
+  String get chooseFolder => isArabic ? 'اختيار مجلد' : 'Choose folder';
+  String get defaultFolder => isArabic ? 'المجلد الافتراضي' : 'Default folder';
+  String get resetToDefault => isArabic ? 'العودة للافتراضي' : 'Reset to default';
+  String get deleteFile => isArabic ? 'حذف الملف' : 'Delete file';
+  String get confirmDeleteFile => isArabic
+      ? 'سيُحذف الملف من هذا الجهاز نهائيًا. متابعة؟'
+      : 'The file is deleted from this device for good. Continue?';
+
+  // Recordings page
+  String get groupBy => isArabic ? 'تجميع' : 'Group by';
+  String get groupNone => isArabic ? 'بدون' : 'None';
+  String get groupChannel => isArabic ? 'القناة' : 'Channel';
+  String get groupSeries => isArabic ? 'المسلسل / البرنامج' : 'Series';
+  String get groupDay => isArabic ? 'اليوم' : 'Day';
+  String get allChannelsFilter => isArabic ? 'كل القنوات' : 'All channels';
+  String get filterRecordings => isArabic ? 'تصفية التسجيلات' : 'Filter recordings';
+  String get searchTooltip => isArabic ? 'بحث' : 'Search';
+  String get searchChannelsTitle => isArabic ? 'بحث في القنوات' : 'Search channels';
+  String get searchGuideTitle => isArabic ? 'بحث في الدليل' : 'Search the guide';
+  String get allGroupsGuide => isArabic ? 'الكل' : 'All';
 }

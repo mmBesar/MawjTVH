@@ -46,3 +46,11 @@ __pycache__/
 AGENTS.md
 CLAUDE.md
 notes/
+
+# Signing material: never commit any of it
+*.jks
+*.keystore
+*.p12
+key.properties
+**/key.properties
+local.properties

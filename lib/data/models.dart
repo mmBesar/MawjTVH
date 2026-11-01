@@ -272,6 +272,7 @@ class AppSettings {
     this.mpvPath = '',
     this.autoRefreshMinutes = 360,
     this.guideHours = 12,
+    this.recordDir = '',
   });
 
   factory AppSettings.defaults() => const AppSettings(
@@ -312,6 +313,9 @@ class AppSettings {
   /// How many hours the guide timeline spans (12 to 72).
   final int guideHours;
 
+  /// Where "record to this device" saves; empty means the default folder.
+  final String recordDir;
+
   AppSettings copyWith({
     ThemeFamily? themeFamily,
     ThemeAccent? accent,
@@ -326,6 +330,7 @@ class AppSettings {
     String? mpvPath,
     int? autoRefreshMinutes,
     int? guideHours,
+    String? recordDir,
   }) {
     return AppSettings(
       themeFamily: themeFamily ?? this.themeFamily,
@@ -343,6 +348,7 @@ class AppSettings {
       mpvPath: mpvPath ?? this.mpvPath,
       autoRefreshMinutes: autoRefreshMinutes ?? this.autoRefreshMinutes,
       guideHours: guideHours ?? this.guideHours,
+      recordDir: recordDir ?? this.recordDir,
     );
   }
 
@@ -360,6 +366,7 @@ class AppSettings {
         'mpvPath': mpvPath,
         'autoRefreshMinutes': autoRefreshMinutes,
         'guideHours': guideHours,
+        'recordDir': recordDir,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -389,6 +396,7 @@ class AppSettings {
       mpvPath: json['mpvPath'] as String? ?? '',
       autoRefreshMinutes: json['autoRefreshMinutes'] as int? ?? 360,
       guideHours: json['guideHours'] as int? ?? 12,
+      recordDir: json['recordDir'] as String? ?? '',
     );
   }
 }

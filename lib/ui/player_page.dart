@@ -16,9 +16,11 @@ import '../core/network_image.dart';
 import '../core/platform.dart';
 import '../core/theme.dart';
 import '../data/app_state.dart';
+import '../data/local_recorder.dart';
 import '../data/models.dart';
 import '../data/mpv_runtime.dart';
 import '../l10n/strings.dart';
+import '../l10n/tvh_strings.dart';
 import 'desktop_player_page.dart';
 import 'widgets/channel_logo.dart';
 import 'widgets/record_now_button.dart';
@@ -87,7 +89,7 @@ class _PlayerPageState extends State<PlayerPage> {
   ].join(',');
 
   /// How long to wait for the first video frame before saying so.
-  static const Duration _stallAfter = Duration(seconds: 15);
+  static const Duration _stallAfter = Duration(seconds: 25);
 
   /// Controls fade out after this long while a stream is playing.
   static const Duration _controlsTimeout = Duration(seconds: 4);
@@ -133,6 +135,9 @@ class _PlayerPageState extends State<PlayerPage> {
   Timer? _stallTimer;
   Timer? _hideTimer;
   Timer? _osdTimer;
+  Timer? _errorTimer;
+  int _autoRetries = 0;
+  bool _localRecording = false;
 
   (int, int)? _softwareVideoSize;
   VideoParams? _videoParams;
@@ -178,10 +183,28 @@ class _PlayerPageState extends State<PlayerPage> {
     _volume = _player.state.volume;
 
     _errorSubscription = _player.stream.error.listen((message) {
-      if (!mounted || message.trim().isEmpty) {
+      if (!mounted || message.trim().isEmpty || _hasVideo) {
+        // A late complaint while the picture is already moving is noise.
         return;
       }
-      setState(() => _error = message.trim());
+      final text = message.trim();
+      _errorTimer?.cancel();
+      if (_autoRetries < 2) {
+        // A tuner needs a few seconds to lock; the first try often fails
+        // while the second works. Retry quietly before saying anything.
+        _autoRetries++;
+        _errorTimer = Timer(const Duration(seconds: 2), () {
+          if (mounted && !_hasVideo) {
+            unawaited(_open(auto: true));
+          }
+        });
+        return;
+      }
+      _errorTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted && !_hasVideo) {
+          setState(() => _error = text);
+        }
+      });
     });
     _playingSubscription = _player.stream.playing.listen((playing) {
       if (!mounted) {
@@ -213,6 +236,7 @@ class _PlayerPageState extends State<PlayerPage> {
       final hasSize = (params.w ?? 0) > 0 && (params.h ?? 0) > 0;
       if (hasSize && mounted && !_hasVideo) {
         _stallTimer?.cancel();
+        _errorTimer?.cancel();
         setState(() {
           _hasVideo = true;
           _stalled = false;
@@ -258,9 +282,14 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
-  Future<void> _open() async {
+  Future<void> _open({bool auto = false}) async {
     final state = context.read<AppState>();
     final allowInsecure = state.activeSource?.allowInsecureCerts ?? false;
+    if (!auto) {
+      _autoRetries = 0;
+    }
+    _errorTimer?.cancel();
+    await _stopLocalRecording(silent: true);
     _stallTimer?.cancel();
     setState(() {
       _error = null;
@@ -290,7 +319,7 @@ class _PlayerPageState extends State<PlayerPage> {
         await _setMpvProperty('framedrop', 'vo');
       }
       await _setMpvProperty('keep-open', 'yes');
-      await _setMpvProperty('network-timeout', '60');
+      await _setMpvProperty('network-timeout', '90');
       await _setMpvProperty('tls-verify', allowInsecure ? 'no' : 'yes');
       await _setMpvProperty('demuxer-lavf-o', _demuxerLavfOptions);
       await _player.open(
@@ -310,6 +339,50 @@ class _PlayerPageState extends State<PlayerPage> {
           _error = error.toString();
         });
       }
+    }
+  }
+
+  // ---- Recording to this device -------------------------------------------
+
+  Future<void> _stopLocalRecording({bool silent = false}) async {
+    if (!_localRecording) {
+      return;
+    }
+    await _setMpvProperty('stream-record', '');
+    if (mounted) {
+      setState(() => _localRecording = false);
+      if (!silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.strings.stopLocalRecording)),
+        );
+      }
+    } else {
+      _localRecording = false;
+    }
+  }
+
+  Future<void> _toggleLocalRecording() async {
+    if (_localRecording) {
+      await _stopLocalRecording();
+      return;
+    }
+    final state = context.read<AppState>();
+    final strings = context.strings;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final path = await LocalRecordings.newPath(
+        state.settings.recordDir,
+        _channel.name,
+      );
+      await _setMpvProperty('stream-record', path);
+      if (mounted) {
+        setState(() => _localRecording = true);
+      }
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(strings.localRecordingStarted(path))));
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text('$error')));
     }
   }
 
@@ -687,6 +760,10 @@ class _PlayerPageState extends State<PlayerPage> {
     _stallTimer?.cancel();
     _hideTimer?.cancel();
     _osdTimer?.cancel();
+    _errorTimer?.cancel();
+    if (_localRecording) {
+      unawaited(_setMpvProperty('stream-record', ''));
+    }
     _errorSubscription?.cancel();
     _playingSubscription?.cancel();
     _bufferingSubscription?.cancel();
@@ -1076,8 +1153,6 @@ class _PlayerPageState extends State<PlayerPage> {
                         onPressed: () =>
                             unawaited(state.toggleFavorite(_channel)),
                       ),
-                      RecordNowButton(channel: _channel),
-                      const SizedBox(width: 4),
                       _RoundButton(
                         tooltip: strings.diagnostics,
                         icon: Icons.monitor_heart_outlined,
@@ -1151,6 +1226,24 @@ class _PlayerPageState extends State<PlayerPage> {
                 },
               ),
             ),
+            // Recording buttons, bottom end: the top bar is too crowded on a
+            // phone held upright.
+            if (!isSyntheticChannel(_channel))
+              PositionedDirectional(
+                bottom: 8 + padding.bottom + (showStrip ? 132 : 0),
+                end: 8 + padding.right,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    RecordNowButton(channel: _channel),
+                    const SizedBox(width: 8),
+                    LocalRecordButton(
+                      recording: _localRecording,
+                      onPressed: () => unawaited(_toggleLocalRecording()),
+                    ),
+                  ],
+                ),
+              ),
             if (immersive)
               Align(
                 alignment: Alignment.bottomCenter,

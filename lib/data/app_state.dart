@@ -16,6 +16,10 @@ import 'tvh_models.dart';
 /// Prefix of the synthetic channel id used to play a recording in the player.
 const String kRecordingIdPrefix = 'rec:';
 
+/// True for the made-up channels that play a recording or a local file.
+bool isSyntheticChannel(Channel channel) =>
+    channel.id.startsWith(kRecordingIdPrefix);
+
 /// Central application state: persisted sources and settings, the currently
 /// loaded channel/EPG snapshot, and a lightweight ticker so "now playing"
 /// information stays current without reopening the guide.
@@ -51,6 +55,7 @@ class AppState extends ChangeNotifier {
   List<String> _recents = <String>[];
   Map<String, Channel> _channelById = const <String, Channel>{};
   List<String> _groups = const <String>[];
+  String? _groupFilter;
 
   AppSettings get settings => _settings;
   List<SourceConfig> get sources => List<SourceConfig>.unmodifiable(_sources);
@@ -79,6 +84,27 @@ class AppState extends ChangeNotifier {
         for (final id in _recents)
           if (_channelById[id] != null) _channelById[id]!,
       ];
+
+  /// The channel group (Tvheadend tag) chosen on Watch or Guide, shared by
+  /// both so they always show the same slice. Null means every channel.
+  String? get groupFilter => _groups.contains(_groupFilter) ? _groupFilter : null;
+
+  void setGroupFilter(String? group) {
+    if (_groupFilter == group) {
+      return;
+    }
+    _groupFilter = group;
+    notifyListeners();
+  }
+
+  /// The channels of the chosen group (all when none is chosen).
+  List<Channel> get filteredChannels {
+    final group = groupFilter;
+    if (group == null) {
+      return channels;
+    }
+    return channels.where((channel) => channel.group == group).toList(growable: false);
+  }
 
   bool isFavorite(Channel channel) => _favorites.contains(channel.id);
 
@@ -113,6 +139,10 @@ class AppState extends ChangeNotifier {
       _now = DateTime.now();
       notifyListeners();
       _maybeAutoRefresh();
+      // Keep the "recording now" dots honest without hammering the server.
+      if (++_tick % 2 == 0 && _content != null) {
+        unawaited(loadRecordings(quiet: true));
+      }
     });
     notifyListeners();
 
@@ -153,6 +183,7 @@ class AppState extends ChangeNotifier {
       _lastErrorMessage = null;
       _error = null;
       _now = DateTime.now();
+      unawaited(loadRecordings(quiet: true));
     } catch (error) {
       if (generation != _loadGeneration) {
         return;
@@ -231,7 +262,7 @@ class AppState extends ChangeNotifier {
   /// Remembers [channel] as the most recently watched one.
   Future<void> markWatched(Channel channel) async {
     // A recording played through the player is not a channel to come back to.
-    if (channel.id.startsWith(kRecordingIdPrefix)) {
+    if (isSyntheticChannel(channel)) {
       return;
     }
     final next = <String>[
@@ -421,12 +452,32 @@ class AppState extends ChangeNotifier {
   String? get recordingsError => _recordingsError;
   bool get recordingsLoading => _recordingsLoading;
 
-  Future<void> loadRecordings() async {
+  Channel? channelById(String id) => _channelById[id];
+
+  /// Channels the server is recording right now.
+  Set<String> get recordingChannelIds => <String>{
+        for (final recording in _recordings)
+          if (recording.isRecording && recording.channelUuid.isNotEmpty)
+            recording.channelUuid,
+      };
+
+  bool isRecordingChannel(Channel channel) =>
+      _recordings.any(
+        (recording) =>
+            recording.isRecording && recording.channelUuid == channel.id,
+      );
+
+  int _tick = 0;
+
+  /// [quiet] is for background polling: no spinner and no error banner.
+  Future<void> loadRecordings({bool quiet = false}) async {
     if (activeSource == null || _recordingsLoading) {
       return;
     }
     _recordingsLoading = true;
-    _recordingsError = null;
+    if (!quiet) {
+      _recordingsError = null;
+    }
     notifyListeners();
     try {
       final all = await withClient((client) async {
@@ -436,8 +487,11 @@ class AppState extends ChangeNotifier {
         return <TvhRecording>[...upcoming, ...finished, ...failed];
       });
       _recordings = all;
+      _recordingsError = null;
     } catch (error) {
-      _recordingsError = _messageFor(error);
+      if (!quiet) {
+        _recordingsError = _messageFor(error);
+      }
     } finally {
       _recordingsLoading = false;
       notifyListeners();

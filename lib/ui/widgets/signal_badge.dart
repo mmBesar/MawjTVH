@@ -63,7 +63,7 @@ class _SignalBadgeState extends State<SignalBadge> {
       return;
     }
     final state = context.read<AppState>();
-    if (!state.isAdmin || widget.channel.id.startsWith(kRecordingIdPrefix)) {
+    if (!state.isAdmin || isSyntheticChannel(widget.channel)) {
       return;
     }
     _busy = true;

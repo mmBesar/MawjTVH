@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import '../core/network_image.dart';
 import 'models.dart';
@@ -274,8 +275,13 @@ class TvhClient {
   Future<void> _action(String path, Map<String, String> form) async {
     final response = await _send('POST', path, form: form);
     if (response.statusCode != 200) {
+      // Tvheadend usually says why in the body ("Invalid argument"...).
+      final said = response.body.replaceAll(RegExp(r'<[^>]*>'), ' ').trim();
+      final detail = said.isEmpty
+          ? ''
+          : ' (${said.length > 160 ? said.substring(0, 160) : said})';
       throw TvhException(
-        statusMessage(response.statusCode),
+        '${statusMessage(response.statusCode)} [$path]$detail',
         kind: TvhFailure.http,
         statusCode: response.statusCode,
       );
@@ -479,19 +485,30 @@ class TvhClient {
     throw const TvhException('The server has no recording profile.');
   }
 
+  /// The recording profile to use, or empty to let the server pick its
+  /// default. Plain users often may not list profiles, and the server then
+  /// falls back to the default by itself.
+  Future<String> _configOrDefault() async {
+    try {
+      return await defaultDvrConfig();
+    } on TvhException {
+      return '';
+    }
+  }
+
   Future<void> recordEvent(int eventId) async {
-    final config = await defaultDvrConfig();
+    final config = await _configOrDefault();
     await _action('/api/dvr/entry/create_by_event', <String, String>{
-      'config_uuid': config,
+      if (config.isNotEmpty) 'config_uuid': config,
       'event_id': '$eventId',
     });
   }
 
   /// Record every future showing of this programme's series.
   Future<void> recordSeries(int eventId) async {
-    final config = await defaultDvrConfig();
+    final config = await _configOrDefault();
     await _action('/api/dvr/autorec/create_by_series', <String, String>{
-      'config_uuid': config,
+      if (config.isNotEmpty) 'config_uuid': config,
       'event_id': '$eventId',
     });
   }
@@ -499,13 +516,14 @@ class TvhClient {
   /// Record a channel right now for [minutes], a one-off timer.
   Future<void> recordNow(String channelUuid, String title, int minutes) async {
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final config = await _configOrDefault();
     final conf = jsonEncode(<String, dynamic>{
       'start': now,
       'stop': now + minutes * 60,
       'channel': channelUuid,
       'title': <String, String>{'eng': title},
-      'disp_title': title,
       'enabled': true,
+      if (config.isNotEmpty) 'config_name': config,
     });
     await _action('/api/dvr/entry/create', <String, String>{'conf': conf});
   }

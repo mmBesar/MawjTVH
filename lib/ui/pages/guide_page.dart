@@ -8,12 +8,14 @@ import '../../core/theme.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../l10n/strings.dart';
+import '../../l10n/tvh_strings.dart';
 import '../player_page.dart';
 import '../widgets/channel_logo.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/programme_sheet.dart';
 import '../widgets/warnings_panel.dart';
 import 'channel_guide_page.dart';
+import 'search_page.dart';
 
 /// A twelve-hour timeline. The channel column stays put while the programmes
 /// scroll sideways, and both scroll up and down together.
@@ -169,7 +171,7 @@ class _GuidePageState extends State<GuidePage> {
 
     final channels = _favoritesOnly && state.favorites.isNotEmpty
         ? state.favorites
-        : state.channels;
+        : state.filteredChannels;
     final windowEnd = _windowStart.add(Duration(minutes: _spanMinutes));
     final use24 = state.settings.use24HourTime;
     final allowInsecure = state.activeSource?.allowInsecureCerts ?? false;
@@ -202,6 +204,12 @@ class _GuidePageState extends State<GuidePage> {
                       letterSpacing: -0.3,
                     ),
                   ),
+                ),
+                IconButton(
+                  tooltip: strings.searchGuideTitle,
+                  onPressed: () =>
+                      SearchPage.open(context, SearchScope.programmes),
+                  icon: const Icon(Icons.search_rounded),
                 ),
                 IconButton(
                   tooltip: strings.guideFavoritesOnly,
@@ -253,6 +261,33 @@ class _GuidePageState extends State<GuidePage> {
               ],
             ),
           ),
+          if (state.groups.isNotEmpty)
+            SizedBox(
+              height: 44,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(end: 8),
+                    child: ChoiceChip(
+                      label: Text(strings.allGroupsGuide),
+                      selected: state.groupFilter == null,
+                      onSelected: (_) => state.setGroupFilter(null),
+                    ),
+                  ),
+                  for (final group in state.groups)
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(end: 8),
+                      child: ChoiceChip(
+                        label: BidiText(group),
+                        selected: state.groupFilter == group,
+                        onSelected: (_) => state.setGroupFilter(group),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           WarningsPanel(warnings: state.warnings),
           if (channels.isEmpty)
             Expanded(
@@ -634,7 +669,7 @@ class _Block extends StatelessWidget {
                 return const SizedBox.shrink();
               }
               final roomy = constraints.maxWidth >= 120;
-              return Padding(
+              final content = Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -674,6 +709,28 @@ class _Block extends StatelessWidget {
                       ),
                   ],
                 ),
+              );
+              if (!programme.hasRecording) {
+                return content;
+              }
+              return Stack(
+                children: <Widget>[
+                  content,
+                  PositionedDirectional(
+                    top: 7,
+                    end: 7,
+                    child: Container(
+                      width: 9,
+                      height: 9,
+                      decoration: BoxDecoration(
+                        color: programme.dvrState == 'recording'
+                            ? const Color(0xFFED3B4B)
+                            : colors.accent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ],
               );
             },
           ),

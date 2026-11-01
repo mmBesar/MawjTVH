@@ -19,7 +19,7 @@ class RecordNowButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (channel.id.startsWith(kRecordingIdPrefix)) {
+    if (isSyntheticChannel(channel)) {
       return const SizedBox.shrink();
     }
     final strings = context.strings;
@@ -29,7 +29,7 @@ class RecordNowButton extends StatelessWidget {
       color: dark ? const Color(0xFFED8796) : Theme.of(context).colorScheme.error,
     );
     final menu = PopupMenuButton<int>(
-      tooltip: strings.recordNow,
+      tooltip: strings.recordOnServer,
       icon: icon,
       onSelected: (minutes) => runServerAction(
         context,
@@ -53,6 +53,41 @@ class RecordNowButton extends StatelessWidget {
       shape: const CircleBorder(),
       clipBehavior: Clip.antiAlias,
       child: menu,
+    );
+  }
+}
+
+/// Starts or stops a copy of the stream being watched, saved on this device.
+class LocalRecordButton extends StatelessWidget {
+  const LocalRecordButton({
+    super.key,
+    required this.recording,
+    required this.onPressed,
+    this.dark = true,
+  });
+
+  final bool recording;
+  final VoidCallback onPressed;
+  final bool dark;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final error = dark ? const Color(0xFFED8796) : Theme.of(context).colorScheme.error;
+    final button = IconButton(
+      tooltip: recording ? strings.stopLocalRecording : strings.recordOnDevice,
+      onPressed: onPressed,
+      color: recording ? error : (dark ? Colors.white : null),
+      icon: Icon(recording ? Icons.stop_circle_rounded : Icons.save_alt_rounded),
+    );
+    if (!dark) {
+      return button;
+    }
+    return Material(
+      color: Colors.black.withValues(alpha: 0.45),
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: button,
     );
   }
 }

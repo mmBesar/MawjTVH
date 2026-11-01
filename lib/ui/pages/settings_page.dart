@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -9,6 +10,7 @@ import '../../core/catppuccin.dart';
 import '../../core/platform.dart';
 import '../../core/theme.dart';
 import '../../data/app_state.dart';
+import '../../data/local_recorder.dart';
 import '../../data/models.dart';
 import '../../data/mpv_runtime.dart';
 import '../../l10n/strings.dart';
@@ -157,6 +159,58 @@ class SettingsPage extends StatelessWidget {
                   ],
                 ),
                 if (kIsDesktop) const _PlayerSettings(),
+                _Section(
+                  title: strings.recordings,
+                  children: <Widget>[
+                    _FieldLabel(text: strings.recordFolder),
+                    FutureBuilder<String>(
+                      future: LocalRecordings.directory(settings.recordDir)
+                          .then((dir) => dir.path)
+                          .catchError((Object _) => settings.recordDir),
+                      builder: (context, snapshot) {
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.folder_rounded),
+                          title: BidiText(
+                            snapshot.data ?? settings.recordDir,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            settings.recordDir.isEmpty
+                                ? strings.defaultFolder
+                                : strings.recordFolderHelp,
+                          ),
+                        );
+                      },
+                    ),
+                    Wrap(
+                      spacing: 8,
+                      children: <Widget>[
+                        if (kIsDesktop)
+                          FilledButton.tonalIcon(
+                            onPressed: () async {
+                              final path = await getDirectoryPath();
+                              if (path != null) {
+                                unawaited(state.updateSettings(
+                                  settings.copyWith(recordDir: path),
+                                ));
+                              }
+                            },
+                            icon: const Icon(Icons.folder_open_rounded, size: 18),
+                            label: Text(strings.chooseFolder),
+                          ),
+                        if (settings.recordDir.isNotEmpty)
+                          TextButton(
+                            onPressed: () => unawaited(
+                              state.updateSettings(settings.copyWith(recordDir: '')),
+                            ),
+                            child: Text(strings.resetToDefault),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
                 _Section(
                   title: strings.dataAndGuide,
                   children: <Widget>[

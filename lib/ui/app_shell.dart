@@ -27,9 +27,8 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  static const int _searchIndex = 4;
+  static const int _recordingsIndex = 3;
   int _index = 0;
-  final ValueNotifier<int> _searchFocus = ValueNotifier<int>(0);
   final PageController _pageController = PageController();
 
   @override
@@ -45,7 +44,6 @@ class _AppShellState extends State<AppShell> {
     if (kIsDesktop) {
       HardwareKeyboard.instance.removeHandler(_onKey);
     }
-    _searchFocus.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -61,8 +59,8 @@ class _AppShellState extends State<AppShell> {
         ),
       );
     }
-    if (index == _searchIndex) {
-      _searchFocus.value++;
+    if (index == _recordingsIndex) {
+      unawaited(context.read<AppState>().loadRecordings());
     }
   }
 
@@ -97,7 +95,7 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  /// Ctrl+1..6 switch tab, Ctrl+F / Ctrl+K search, Ctrl+R refresh. This is a
+  /// Ctrl+1..5 switch tab, Ctrl+F / Ctrl+K search, Ctrl+R refresh. This is a
   /// global handler so it works wherever keyboard focus happens to be, and
   /// stays quiet while another page (the player, a sheet) is on top.
   bool _onKey(KeyEvent event) {
@@ -117,7 +115,6 @@ class _AppShellState extends State<AppShell> {
       LogicalKeyboardKey.digit3,
       LogicalKeyboardKey.digit4,
       LogicalKeyboardKey.digit5,
-      LogicalKeyboardKey.digit6,
     ];
     final tab = tabs.indexOf(key);
     if (tab >= 0) {
@@ -125,7 +122,13 @@ class _AppShellState extends State<AppShell> {
       return true;
     }
     if (key == LogicalKeyboardKey.keyF || key == LogicalKeyboardKey.keyK) {
-      _goTo(_searchIndex);
+      // Search belongs to the page you are on: channels from Watch and
+      // Favorites, the guide from the Guide.
+      if (_index <= 1) {
+        unawaited(SearchPage.open(context, SearchScope.channels));
+      } else if (_index == 2) {
+        unawaited(SearchPage.open(context, SearchScope.programmes));
+      }
       return true;
     }
     if (key == LogicalKeyboardKey.keyR) {
@@ -160,7 +163,6 @@ class _AppShellState extends State<AppShell> {
         onEdgeDragEnd: kIsDesktop ? null : _edgeDragEnd,
       ),
       const RecordingsPage(),
-      SearchPage(focusRequests: _searchFocus),
       SettingsPage(onOpenSources: _openSources),
     ];
     final labels = <String>[
@@ -168,7 +170,6 @@ class _AppShellState extends State<AppShell> {
       strings.favorites,
       strings.guide,
       strings.recordings,
-      strings.search,
       strings.settings,
     ];
     const icons = <IconData>[
@@ -176,7 +177,6 @@ class _AppShellState extends State<AppShell> {
       Icons.star_rounded,
       Icons.calendar_month_rounded,
       Icons.fiber_manual_record_rounded,
-      Icons.search_rounded,
       Icons.tune_rounded,
     ];
 
