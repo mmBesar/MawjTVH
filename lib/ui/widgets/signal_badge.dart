@@ -63,7 +63,7 @@ class _SignalBadgeState extends State<SignalBadge> {
       return;
     }
     final state = context.read<AppState>();
-    if (!state.isAdmin || isSyntheticChannel(widget.channel)) {
+    if (!(state.isAdmin || state.usesHtsp) || isSyntheticChannel(widget.channel)) {
       return;
     }
     _busy = true;

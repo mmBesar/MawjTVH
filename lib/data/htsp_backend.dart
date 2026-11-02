@@ -78,6 +78,7 @@ class HtspBackend {
 
   Future<void> close() async {
     _closed = true;
+    _signalIdle?.cancel();
     _horizon?.cancel();
     _debounce?.cancel();
     await _subscription?.cancel();
@@ -128,6 +129,22 @@ class HtspBackend {
         }
       case 'dvrEntryDelete':
         _dvr.remove(_int(message['id']));
+      case 'signalStatus':
+        if (_int(message['subscriptionId']) == _signalSub) {
+          _signal = TvhSignal(
+            status: _string(message['feStatus']),
+            snrPercent: _percent(message['feSNR']),
+            signalPercent: _percent(message['feSignal']),
+            ber: _int(message['feBER']),
+            unc: _int(message['feUNC']),
+          );
+          _signalAt = DateTime.now();
+          final waiter = _signalWaiter;
+          if (waiter != null && !waiter.isCompleted) {
+            waiter.complete(_signal);
+          }
+        }
+        return;
       case 'initialSyncCompleted':
         if (!_synced.isCompleted) {
           _synced.complete();
@@ -340,6 +357,86 @@ class HtspBackend {
   String recordingUrl(String dvrId) =>
       _address.dvrUrl(dvrId, user: _user, pass: _pass);
 
+  // ---- signal --------------------------------------------------------------
+
+  static const int _signalSubscription = 7001;
+  int? _signalSub;
+  String? _signalChannel;
+  TvhSignal? _signal;
+  DateTime? _signalAt;
+  Completer<TvhSignal?>? _signalWaiter;
+  Timer? _signalIdle;
+
+  /// Signal of the tuner serving [channelId], read from a lightweight second
+  /// subscription to the same channel (the server shares the tuner, so this
+  /// needs no extra tuner and works for any account that may watch TV). The
+  /// subscription closes by itself when nobody asks for 20 seconds.
+  Future<TvhSignal?> signalFor(String channelId) async {
+    final channel = int.tryParse(channelId);
+    if (channel == null || isClosed) {
+      return null;
+    }
+    _signalIdle?.cancel();
+    _signalIdle = Timer(const Duration(seconds: 20), () {
+      unawaited(_stopSignal());
+    });
+    if (_signalChannel == channelId && _signalSub != null) {
+      final at = _signalAt;
+      if (at != null && DateTime.now().difference(at) < const Duration(seconds: 10)) {
+        return _signal;
+      }
+      return _awaitSignal();
+    }
+    await _stopSignal();
+    _signalChannel = channelId;
+    _signalSub = _signalSubscription;
+    _signal = null;
+    _signalAt = null;
+    _signalWaiter = Completer<TvhSignal?>();
+    try {
+      await _connection.request('subscribe', <String, Object?>{
+        'subscriptionId': _signalSubscription,
+        'channelId': channel,
+        // Only the status messages are wanted; ask the server to keep the
+        // media queue tiny so almost no video is sent.
+        'queueDepth': 1,
+        'weight': 1,
+      });
+    } on HtspException {
+      _signalSub = null;
+      _signalChannel = null;
+      return null;
+    }
+    return _awaitSignal();
+  }
+
+  Future<TvhSignal?> _awaitSignal() {
+    var waiter = _signalWaiter;
+    if (waiter == null || waiter.isCompleted) {
+      waiter = _signalWaiter = Completer<TvhSignal?>();
+    }
+    return waiter.future.timeout(
+      const Duration(seconds: 6),
+      onTimeout: () => _signal,
+    );
+  }
+
+  Future<void> _stopSignal() async {
+    _signalIdle?.cancel();
+    final sub = _signalSub;
+    _signalSub = null;
+    _signalChannel = null;
+    if (sub != null && !isClosed) {
+      try {
+        await _connection.request('unsubscribe', <String, Object?>{
+          'subscriptionId': sub,
+        });
+      } on HtspException {
+        // Already gone.
+      }
+    }
+  }
+
   // ---- actions -------------------------------------------------------------
 
   Future<void> recordEvent(int eventId) async {
@@ -437,3 +534,9 @@ int? _int(Object? value) {
 }
 
 String _string(Object? value) => value is String ? value : '';
+
+/// HTSP reports signal and SNR on a 0..65535 scale.
+double? _percent(Object? value) {
+  final number = _int(value);
+  return number == null ? null : TvhSignal.relativeToPercent(number);
+}

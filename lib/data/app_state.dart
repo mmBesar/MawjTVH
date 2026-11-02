@@ -686,6 +686,10 @@ class AppState extends ChangeNotifier {
   /// Signal of the stream being watched. Needs an administrator account on
   /// the server; for anyone else this is `null`.
   Future<TvhSignal?> signalFor(Channel channel) async {
+    final htsp = _htsp;
+    if (htsp != null && !htsp.isClosed) {
+      return htsp.signalFor(channel.id);
+    }
     if (!isAdmin) {
       return null;
     }

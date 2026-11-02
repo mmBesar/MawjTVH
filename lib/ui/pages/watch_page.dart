@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/bidi.dart';
+import '../../core/network_image.dart';
 import '../../core/platform.dart';
 import '../../core/theme.dart';
 import '../../data/app_state.dart';
@@ -434,8 +435,12 @@ class _HeroCard extends StatelessWidget {
     final strings = context.strings;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final gradient = channelGradient(channel.name, dark: dark);
-    final on = dark ? Colors.white : const Color(0xFF0B1330);
     final current = programme;
+    // Artwork from the guide turns the card into a poster: dimmed picture,
+    // white text. Without artwork the channel's own gradient is used.
+    final art = current?.iconUrl?.trim();
+    final hasArt = art != null && art.isNotEmpty;
+    final on = hasArt || dark ? Colors.white : const Color(0xFF0B1330);
     final use24 = context.read<AppState>().settings.use24HourTime;
 
     return Material(
@@ -449,6 +454,21 @@ class _HeroCard extends StatelessWidget {
             end: AlignmentDirectional.bottomEnd,
             colors: gradient,
           ),
+          image: hasArt
+              ? DecorationImage(
+                  image: ResizeImage(
+                    MawjNetworkImage(art!, allowInsecure: allowInsecure),
+                    width: 900,
+                    policy: ResizeImagePolicy.fit,
+                  ),
+                  fit: BoxFit.cover,
+                  colorFilter: ColorFilter.mode(
+                    Colors.black.withValues(alpha: 0.58),
+                    BlendMode.darken,
+                  ),
+                  onError: (error, stackTrace) {},
+                )
+              : null,
         ),
         child: InkWell(
           onTap: () => openPlayer(context, channel),
