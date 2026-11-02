@@ -11,14 +11,6 @@
   <launchable type="desktop-id">mawjtvh.desktop</launchable>
   <url type="homepage">https://github.com/mmBesar/MawjTVH</url>
   <url type="bugtracker">https://github.com/mmBesar/MawjTVH/issues</url>
-  <provides>
-    <binary>mawjtvh</binary>
-  </provides>
-  <categories>
-    <category>AudioVideo</category>
-    <category>Video</category>
-    <category>Player</category>
-  </categories>
   <content_rating type="oars-1.1" />
   <releases>
     <release version="@VERSION@" date="@DATE@" />

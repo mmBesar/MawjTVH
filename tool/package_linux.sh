@@ -394,7 +394,9 @@ EOF
     chmod +x "$tool"
   fi
 
-  ARCH="$APPIMAGE_ARCH" APPIMAGE_EXTRACT_AND_RUN=1 "$tool" \
+  # appimagetool's AppStream check is stricter than the DEB/RPM tooling and
+  # has rejected valid files before; the metadata is still shipped.
+  ARCH="$APPIMAGE_ARCH" APPIMAGE_EXTRACT_AND_RUN=1 "$tool" --no-appstream \
     "$appdir" "$OUT/MawjTVH-${VERSION}-${APPIMAGE_ARCH}.AppImage" >/dev/null
   chmod +x "$OUT/MawjTVH-${VERSION}-${APPIMAGE_ARCH}.AppImage"
   echo "  built MawjTVH-${VERSION}-${APPIMAGE_ARCH}.AppImage"

@@ -443,6 +443,8 @@ class _GuidePageState extends State<GuidePage> {
           bottom: 6,
           child: _Block(
             programme: programme,
+            scroll: _horizontal,
+            left: left,
             live: programme.isLiveAt(state.now),
             range: strings.formatRange(
               programme.start,
@@ -636,12 +638,20 @@ class _ChannelCell extends StatelessWidget {
 class _Block extends StatelessWidget {
   const _Block({
     required this.programme,
+    required this.scroll,
+    required this.left,
     required this.live,
     required this.range,
     required this.onTap,
   });
 
   final Programme programme;
+
+  /// The timeline's horizontal scroll, so the text can follow the viewport.
+  final ScrollController scroll;
+
+  /// Where this block starts on the timeline, in pixels.
+  final double left;
   final bool live;
   final String range;
   final VoidCallback onTap;
@@ -669,7 +679,8 @@ class _Block extends StatelessWidget {
                 return const SizedBox.shrink();
               }
               final roomy = constraints.maxWidth >= 120;
-              final content = Padding(
+              final blockWidth = constraints.maxWidth;
+              final inner = Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -709,6 +720,31 @@ class _Block extends StatelessWidget {
                       ),
                   ],
                 ),
+              );
+              // A long programme can start far off-screen. Slide its text
+              // along so it stays readable at whichever edge is visible.
+              final content = AnimatedBuilder(
+                animation: scroll,
+                child: inner,
+                builder: (context, child) {
+                  var shiftLeft = 0.0;
+                  var shiftRight = 0.0;
+                  if (scroll.hasClients && scroll.position.hasViewportDimension) {
+                    final offset = scroll.offset;
+                    final view = scroll.position.viewportDimension;
+                    final room = math.max(0.0, blockWidth - 90);
+                    shiftLeft = (offset - left).clamp(0.0, room).toDouble();
+                    shiftRight =
+                        (left + blockWidth - (offset + view)).clamp(0.0, room).toDouble();
+                    if (shiftLeft + shiftRight > room) {
+                      shiftRight = math.max(0.0, room - shiftLeft);
+                    }
+                  }
+                  return Padding(
+                    padding: EdgeInsets.only(left: shiftLeft, right: shiftRight),
+                    child: child,
+                  );
+                },
               );
               if (!programme.hasRecording) {
                 return content;
