@@ -88,6 +88,21 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release --target-platform android-arm64
 
+      - name: Verify APK signature
+        env:
+          HAVE_KEY: ${{ secrets.ANDROID_KEYSTORE_B64 != '' }}
+        run: |
+          apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n1)"
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          "$apksigner" verify --verbose --print-certs "$apk" | tee "$RUNNER_TEMP/certs.txt"
+          if [ "$HAVE_KEY" = "true" ] && grep -q "Android Debug" "$RUNNER_TEMP/certs.txt"; then
+            echo "::error::Signing secrets are set but the APK carries the debug certificate."
+            exit 1
+          fi
+          if [ "$HAVE_KEY" != "true" ]; then
+            echo "::warning::This APK is signed with the debug key (no signing secrets)."
+          fi
+
       - name: Remove signing material
         if: always()
         run: rm -f android/key.properties "$RUNNER_TEMP/release.jks"

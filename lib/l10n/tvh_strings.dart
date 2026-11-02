@@ -23,6 +23,15 @@ extension TvhStrings on AppStrings {
   String get useHtspHelp => isArabic
       ? 'تحديثات فورية للقنوات والدليل والتسجيلات دون استعلام متكرر. يتطلب فتح منفذ HTSP على الخادم وصلاحية HTSP للحساب.'
       : 'Live updates of channels, guide and recordings with no polling. Needs the server\'s HTSP port open and HTSP access on the account.';
+  String get visualsAndPerformance => isArabic ? 'المظهر والأداء' : 'Visuals & performance';
+  String get richVisuals => isArabic ? 'صور البرامج على البطاقات' : 'Programme artwork on cards';
+  String get richVisualsHelp => isArabic
+      ? 'يعرض صور البرامج من الدليل كخلفيات. أوقفه لتحميل صور أقل وأداء أخف.'
+      : 'Shows guide artwork as card backgrounds. Turn off to load fewer images and run lighter.';
+  String get reduceMotion => isArabic ? 'تقليل الحركة' : 'Reduce motion';
+  String get reduceMotionHelp => isArabic
+      ? 'يوقف الحركات الزخرفية مثل موجة التقدم المتحركة.'
+      : 'Stops decorative animation such as the moving progress wave.';
   String get htspStream => isArabic ? 'البث المباشر عبر HTSP' : 'Watch live TV over HTSP';
   String get htspStreamHelp => isArabic
       ? 'يعيد الاشتراك تلقائيًا عند ضعف الإشارة فيعود البث دون إغلاق المشغّل. أوقفه لاستخدام بث HTTP العادي.'

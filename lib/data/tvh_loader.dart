@@ -81,6 +81,9 @@ class TvhLoader {
   final TvhClientFactory _factory;
 
   Future<SourceContent> load(SourceConfig source, {int guideHours = 12}) async {
+    if (source.useHtsp) {
+      return _loadHtspOnly(source, guideHours);
+    }
     final TvhClient client;
     try {
       client = _factory(source);
@@ -96,16 +99,6 @@ class TvhLoader {
         info = await client.serverInfo();
       } on TvhException {
         // Nice to have, never a reason to fail.
-      }
-
-      if (source.useHtsp) {
-        return await _loadHtsp(
-          source.copyWith(address: client.address.baseUrl),
-          client,
-          permissions,
-          info,
-          guideHours,
-        );
       }
 
       final channelRows = await client.rawChannels();
@@ -168,13 +161,14 @@ class TvhLoader {
     }
   }
 
-  Future<SourceContent> _loadHtsp(
-    SourceConfig source,
-    TvhClient client,
-    TvhPermissions permissions,
-    TvhServerInfo info,
-    int guideHours,
-  ) async {
+  /// HTSP needs no HTTP API and no "web interface" permission on the
+  /// account: everything comes over the one HTSP connection.
+  Future<SourceContent> _loadHtspOnly(SourceConfig source, int guideHours) async {
+    try {
+      TvhAddress.parse(source.address);
+    } on TvhAddressException catch (error) {
+      throw SourceLoadException(error.message, cause: error);
+    }
     final HtspBackend backend;
     try {
       backend = await HtspBackend.open(source, guideHours: guideHours);
@@ -193,16 +187,15 @@ class TvhLoader {
       );
     }
     final epg = backend.guide();
-    final profiles = await client.streamProfiles();
     return SourceContent(
       playlist: Playlist(channels: channels),
       epg: epg,
-      warnings: epg.isEmpty ? <LoadWarning>{LoadWarning.epgEmpty} : <LoadWarning>{},
+      warnings:
+          epg.isEmpty ? <LoadWarning>{LoadWarning.epgEmpty} : <LoadWarning>{},
       loadedAt: DateTime.now(),
       resolvedSource: source,
-      permissions: permissions,
-      serverInfo: info,
-      profiles: profiles,
+      permissions: const TvhPermissions(admin: false, canRecord: true),
+      serverInfo: backend.serverInfo,
       htsp: backend,
     );
   }
@@ -230,5 +223,9 @@ class TvhLoader {
   }
 
   /// Checks a candidate server without keeping anything.
-  Future<SourceContent> probe(SourceConfig source) => load(source);
+  Future<SourceContent> probe(SourceConfig source) async {
+    final content = await load(source);
+    await content.htsp?.close();
+    return content;
+  }
 }

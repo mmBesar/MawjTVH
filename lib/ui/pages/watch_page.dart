@@ -438,7 +438,8 @@ class _HeroCard extends StatelessWidget {
     final current = programme;
     // Artwork from the guide turns the card into a poster: dimmed picture,
     // white text. Without artwork the channel's own gradient is used.
-    final art = current?.iconUrl?.trim();
+    final settings = context.read<AppState>().settings;
+    final art = settings.richVisuals ? current?.iconUrl?.trim() : null;
     final hasArt = art != null && art.isNotEmpty;
     final on = hasArt || dark ? Colors.white : const Color(0xFF0B1330);
     final use24 = context.read<AppState>().settings.use24HourTime;
@@ -457,7 +458,7 @@ class _HeroCard extends StatelessWidget {
           image: hasArt
               ? DecorationImage(
                   image: ResizeImage(
-                    MawjNetworkImage(art!, allowInsecure: allowInsecure),
+                    MawjNetworkImage(art, allowInsecure: allowInsecure),
                     width: 900,
                     policy: ResizeImagePolicy.fit,
                   ),
@@ -563,7 +564,7 @@ class _HeroCard extends StatelessWidget {
                               color: colors.accent,
                               trackColor: on.withValues(alpha: 0.25),
                               height: 18,
-                              animate: true,
+                              animate: !settings.reduceMotion,
                             ),
                     ),
                     const SizedBox(width: 12),

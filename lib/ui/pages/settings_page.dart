@@ -101,6 +101,37 @@ class SettingsPage extends StatelessWidget {
                   ],
                 ),
                 _Section(
+                  title: strings.visualsAndPerformance,
+                  children: <Widget>[
+                    SwitchListTile(
+                      value: settings.richVisuals,
+                      onChanged: (value) =>
+                          unawaited(state.setRichVisuals(value)),
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(strings.richVisuals),
+                      subtitle: Text(
+                        strings.richVisualsHelp,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colors.subtext0,
+                            ),
+                      ),
+                    ),
+                    SwitchListTile(
+                      value: settings.reduceMotion,
+                      onChanged: (value) =>
+                          unawaited(state.setReduceMotion(value)),
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(strings.reduceMotion),
+                      subtitle: Text(
+                        strings.reduceMotionHelp,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colors.subtext0,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+                _Section(
                   title: strings.language,
                   children: <Widget>[
                     InputDecorator(

@@ -186,6 +186,14 @@ class HtspBackend {
     });
   }
 
+  /// Server name and version from the HTSP greeting.
+  TvhServerInfo get serverInfo => TvhServerInfo(
+        name: _string(_connection.server['servername']).isEmpty
+            ? 'Tvheadend'
+            : _string(_connection.server['servername']),
+        version: _string(_connection.server['serverversion']),
+      );
+
   // ---- snapshots -----------------------------------------------------------
 
   String get _user => source.username;
@@ -477,7 +485,7 @@ class HtspBackend {
     final channel = int.tryParse(programme.channelId);
     await _connection.request('addAutorecEntry', <String, Object?>{
       'title': programme.title,
-      if (channel != null) 'channelId': channel,
+      'channelId': ?channel,
     });
   }
 

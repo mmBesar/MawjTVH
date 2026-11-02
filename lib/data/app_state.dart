@@ -7,10 +7,10 @@ import 'package:flutter/foundation.dart';
 
 import '../core/catppuccin.dart';
 import '../core/text.dart';
-import 'models.dart';
-import 'storage.dart';
 import 'htsp_backend.dart';
 import 'htsp_connection.dart';
+import 'models.dart';
+import 'storage.dart';
 import 'tvh_client.dart';
 import 'tvh_loader.dart';
 import 'tvh_models.dart';
@@ -494,6 +494,12 @@ class AppState extends ChangeNotifier {
   Future<void> setUse24HourTime(bool value) {
     return updateSettings(_settings.copyWith(use24HourTime: value));
   }
+
+  Future<void> setRichVisuals(bool value) =>
+      updateSettings(_settings.copyWith(richVisuals: value));
+
+  Future<void> setReduceMotion(bool value) =>
+      updateSettings(_settings.copyWith(reduceMotion: value));
 
   Future<SourceContent> probe(SourceConfig source) => _loader.probe(source);
 

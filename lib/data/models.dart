@@ -297,6 +297,8 @@ class AppSettings {
     this.autoRefreshMinutes = 360,
     this.guideHours = 12,
     this.recordDir = '',
+    this.richVisuals = true,
+    this.reduceMotion = false,
   });
 
   factory AppSettings.defaults() => const AppSettings(
@@ -340,6 +342,13 @@ class AppSettings {
   /// Where "record to this device" saves; empty means the default folder.
   final String recordDir;
 
+  /// Programme artwork on cards and other decorative visuals. Off keeps the
+  /// plain gradient cards and loads fewer images.
+  final bool richVisuals;
+
+  /// Turns off decorative animation (the moving progress waves).
+  final bool reduceMotion;
+
   AppSettings copyWith({
     ThemeFamily? themeFamily,
     ThemeAccent? accent,
@@ -355,6 +364,8 @@ class AppSettings {
     int? autoRefreshMinutes,
     int? guideHours,
     String? recordDir,
+    bool? richVisuals,
+    bool? reduceMotion,
   }) {
     return AppSettings(
       themeFamily: themeFamily ?? this.themeFamily,
@@ -373,6 +384,8 @@ class AppSettings {
       autoRefreshMinutes: autoRefreshMinutes ?? this.autoRefreshMinutes,
       guideHours: guideHours ?? this.guideHours,
       recordDir: recordDir ?? this.recordDir,
+      richVisuals: richVisuals ?? this.richVisuals,
+      reduceMotion: reduceMotion ?? this.reduceMotion,
     );
   }
 
@@ -391,6 +404,8 @@ class AppSettings {
         'autoRefreshMinutes': autoRefreshMinutes,
         'guideHours': guideHours,
         'recordDir': recordDir,
+        'richVisuals': richVisuals,
+        'reduceMotion': reduceMotion,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -421,6 +436,8 @@ class AppSettings {
       autoRefreshMinutes: json['autoRefreshMinutes'] as int? ?? 360,
       guideHours: json['guideHours'] as int? ?? 12,
       recordDir: json['recordDir'] as String? ?? '',
+      richVisuals: json['richVisuals'] as bool? ?? true,
+      reduceMotion: json['reduceMotion'] as bool? ?? false,
     );
   }
 }

@@ -217,6 +217,9 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
       return;
     }
     await _stopLocalRecording(silent: true);
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _channel = channel;
       _decoder = null;
