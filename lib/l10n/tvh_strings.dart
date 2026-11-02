@@ -23,6 +23,10 @@ extension TvhStrings on AppStrings {
   String get useHtspHelp => isArabic
       ? 'تحديثات فورية للقنوات والدليل والتسجيلات دون استعلام متكرر. يتطلب فتح منفذ HTSP على الخادم وصلاحية HTSP للحساب.'
       : 'Live updates of channels, guide and recordings with no polling. Needs the server\'s HTSP port open and HTSP access on the account.';
+  String get htspStream => isArabic ? 'البث المباشر عبر HTSP' : 'Watch live TV over HTSP';
+  String get htspStreamHelp => isArabic
+      ? 'يعيد الاشتراك تلقائيًا عند ضعف الإشارة فيعود البث دون إغلاق المشغّل. أوقفه لاستخدام بث HTTP العادي.'
+      : 'Re-subscribes by itself when the signal drops, so playback resumes instead of ending. Turn off to use the plain HTTP stream.';
   String get htspPort => isArabic ? 'منفذ HTSP' : 'HTSP port';
   String get serverNameHint => isArabic ? 'خادم المنزل' : 'Home server';
   String get showPassword => isArabic ? 'إظهار كلمة المرور' : 'Show password';

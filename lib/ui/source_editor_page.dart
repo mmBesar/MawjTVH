@@ -28,6 +28,7 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
   late final TextEditingController _htspPort;
   late bool _allowInsecure;
   late bool _useHtsp;
+  late bool _htspStream;
 
   bool _saving = false;
   bool _testing = false;
@@ -48,6 +49,7 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
     _profile = TextEditingController(text: source?.profile ?? '');
     _allowInsecure = source?.allowInsecureCerts ?? false;
     _useHtsp = source?.useHtsp ?? false;
+    _htspStream = source?.htspStream ?? true;
     _htspPort = TextEditingController(text: '${source?.htspPort ?? 9982}');
   }
 
@@ -76,6 +78,7 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
       allowInsecureCerts: _allowInsecure,
       useHtsp: _useHtsp,
       htspPort: int.tryParse(_htspPort.text.trim()) ?? 9982,
+      htspStream: _htspStream,
     );
   }
 
@@ -364,6 +367,19 @@ class _SourceEditorPageState extends State<SourceEditorPage> {
                     decoration: const InputDecoration(
                       hintText: '9982',
                       prefixIcon: Icon(Icons.bolt_rounded),
+                    ),
+                  ),
+                  SwitchListTile(
+                    value: _htspStream,
+                    onChanged: (value) => setState(() => _htspStream = value),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(strings.htspStream),
+                    subtitle: Text(
+                      strings.htspStreamHelp,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: colors.subtext0,
+                            height: 1.4,
+                          ),
                     ),
                   ),
                 ],

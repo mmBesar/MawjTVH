@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'htsp_connection.dart';
+import 'htsp_stream_proxy.dart';
 import 'models.dart';
 import 'tvh_address.dart';
 import 'tvh_models.dart';
@@ -26,6 +27,9 @@ class HtspBackend {
   StreamSubscription<Map<String, Object?>>? _subscription;
   Timer? _debounce;
   Timer? _horizon;
+  HtspStreamProxy? _proxy;
+  final Map<String, ({TvhSignal signal, DateTime at})> _liveSignal =
+      <String, ({TvhSignal signal, DateTime at})>{};
   int _guideHours = 12;
   bool _closed = false;
 
@@ -54,6 +58,21 @@ class HtspBackend {
     final backend = HtspBackend._(source, address, connection)
       .._guideHours = guideHours;
     backend._subscription = connection.messages.listen(backend._onMessage);
+    if (source.htspStream) {
+      final proxy = HtspStreamProxy(
+        connection,
+        profile: source.profile,
+        onSignal: (channelId, signal) {
+          backend._liveSignal[channelId] = (signal: signal, at: DateTime.now());
+        },
+      );
+      try {
+        await proxy.start();
+        backend._proxy = proxy;
+      } catch (_) {
+        // No loopback server: fall back to plain HTTP streams.
+      }
+    }
     try {
       await backend._enable();
       await backend._synced.future.timeout(syncTimeout, onTimeout: () {});
@@ -81,6 +100,7 @@ class HtspBackend {
     _signalIdle?.cancel();
     _horizon?.cancel();
     _debounce?.cancel();
+    await _proxy?.close();
     await _subscription?.cancel();
     await _connection.close();
     if (!_changes.isClosed) {
@@ -193,12 +213,13 @@ class HtspBackend {
           sourceId: source.id,
           name: channel.name.isEmpty ? '${channel.id}' : channel.name,
           number: channel.number > 0 ? '${channel.number}' : '',
-          url: _address.streamUrlById(
-            channel.id,
-            user: _user,
-            pass: _pass,
-            profile: source.profile,
-          ),
+          url: _proxy?.urlFor('${channel.id}') ??
+              _address.streamUrlById(
+                channel.id,
+                user: _user,
+                pass: _pass,
+                profile: source.profile,
+              ),
           logoUrl: _address.imageUrl(channel.icon, user: _user, pass: _pass),
           group: names.isEmpty ? null : names.first,
           tags: names,
@@ -375,6 +396,12 @@ class HtspBackend {
     final channel = int.tryParse(channelId);
     if (channel == null || isClosed) {
       return null;
+    }
+    final live = _liveSignal[channelId];
+    if (live != null &&
+        DateTime.now().difference(live.at) < const Duration(seconds: 6)) {
+      // The stream proxy is already receiving this channel's signal.
+      return live.signal;
     }
     _signalIdle?.cancel();
     _signalIdle = Timer(const Duration(seconds: 20), () {

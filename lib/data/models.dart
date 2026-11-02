@@ -15,6 +15,7 @@ class SourceConfig {
     this.allowInsecureCerts = false,
     this.useHtsp = false,
     this.htspPort = 9982,
+    this.htspStream = true,
   });
 
   final String id;
@@ -36,6 +37,10 @@ class SourceConfig {
   final bool useHtsp;
   final int htspPort;
 
+  /// With HTSP on, also play live TV over HTSP (the app re-subscribes when
+  /// the signal drops). Off plays the plain HTTP stream.
+  final bool htspStream;
+
   SourceConfig copyWith({
     String? name,
     String? address,
@@ -45,6 +50,7 @@ class SourceConfig {
     bool? allowInsecureCerts,
     bool? useHtsp,
     int? htspPort,
+    bool? htspStream,
   }) {
     return SourceConfig(
       id: id,
@@ -56,6 +62,7 @@ class SourceConfig {
       allowInsecureCerts: allowInsecureCerts ?? this.allowInsecureCerts,
       useHtsp: useHtsp ?? this.useHtsp,
       htspPort: htspPort ?? this.htspPort,
+      htspStream: htspStream ?? this.htspStream,
     );
   }
 
@@ -69,6 +76,7 @@ class SourceConfig {
         'allowInsecureCerts': allowInsecureCerts,
         'useHtsp': useHtsp,
         'htspPort': htspPort,
+        'htspStream': htspStream,
       };
 
   factory SourceConfig.fromJson(Map<String, dynamic> json) {
@@ -84,6 +92,7 @@ class SourceConfig {
       allowInsecureCerts: json['allowInsecureCerts'] as bool? ?? false,
       useHtsp: json['useHtsp'] as bool? ?? false,
       htspPort: (json['htspPort'] as num?)?.toInt() ?? 9982,
+      htspStream: json['htspStream'] as bool? ?? true,
     );
   }
 }
