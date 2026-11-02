@@ -91,7 +91,7 @@ class SettingsPage extends StatelessWidget {
                             selected: settings.accent == accent,
                             palette: paletteFor(
                               settings.themeFamily == ThemeFamily.system
-                                  ? ThemeFamily.mawj
+                                  ? ThemeFamily.studio
                                   : settings.themeFamily,
                             ),
                             onTap: () => unawaited(state.setAccent(accent)),

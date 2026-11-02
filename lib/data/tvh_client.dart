@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import '../core/network_image.dart';
+import 'htsp_backend.dart' show looksLikeRadioTag;
 import 'models.dart';
 import 'tvh_address.dart';
 import 'tvh_models.dart';
@@ -881,6 +882,7 @@ List<Channel> channelsFromJson({
         logoUrl: client.imageFor(icon),
         group: names.isEmpty ? null : names.first,
         tags: names,
+        isRadio: names.any(looksLikeRadioTag),
       ),
     );
   }

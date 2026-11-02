@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 /// Catppuccin flavours and a pure-black AMOLED mode.
 enum ThemeFamily {
   system,
+  studio,
+  daylight,
   mawj,
   foam,
   latte,
@@ -14,6 +16,8 @@ enum ThemeFamily {
 
   String get label => switch (this) {
         ThemeFamily.system => 'System',
+        ThemeFamily.studio => 'Studio',
+        ThemeFamily.daylight => 'Daylight',
         ThemeFamily.mawj => 'Mawj',
         ThemeFamily.foam => 'Foam',
         ThemeFamily.latte => 'Latte',
@@ -25,6 +29,7 @@ enum ThemeFamily {
 
   bool? get isDark => switch (this) {
         ThemeFamily.system => null,
+        ThemeFamily.daylight => false,
         ThemeFamily.foam => false,
         ThemeFamily.latte => false,
         _ => true,
@@ -193,7 +198,57 @@ const Map<ThemeAccent, Color> _foamAccents = {
   ThemeAccent.lavender: Color(0xFF5E73E6),
 };
 
-/// Deep-sea blue: the default look.
+/// Studio accents: MawjTVH's own signature is a vivid broadcast green.
+const Map<ThemeAccent, Color> _studioAccents = {
+  ..._mawjAccents,
+  ThemeAccent.green: Color(0xFF3DDC97),
+  ThemeAccent.teal: Color(0xFF2BD4C0),
+  ThemeAccent.yellow: Color(0xFFFFC857),
+  ThemeAccent.peach: Color(0xFFFF9F5A),
+  ThemeAccent.red: Color(0xFFFF6B6B),
+};
+
+const Map<ThemeAccent, Color> _daylightAccents = {
+  ..._foamAccents,
+  ThemeAccent.green: Color(0xFF0E9F6E),
+  ThemeAccent.teal: Color(0xFF0B8F86),
+};
+
+/// Pine-black with a broadcast-green accent: the default look.
+const CatppuccinPalette studioPalette = CatppuccinPalette(
+  base: Color(0xFF0A100F),
+  mantle: Color(0xFF070C0B),
+  crust: Color(0xFF040706),
+  text: Color(0xFFEAF5F0),
+  subtext1: Color(0xFFC3D6CE),
+  subtext0: Color(0xFF98B0A6),
+  overlay2: Color(0xFF7E968C),
+  overlay1: Color(0xFF668077),
+  overlay0: Color(0xFF506760),
+  surface2: Color(0xFF2A3F38),
+  surface1: Color(0xFF1D2E29),
+  surface0: Color(0xFF132019),
+  accents: _studioAccents,
+);
+
+/// Warm paper light look to go with Studio.
+const CatppuccinPalette daylightPalette = CatppuccinPalette(
+  base: Color(0xFFFBF8F2),
+  mantle: Color(0xFFF3EEE4),
+  crust: Color(0xFFE8E1D3),
+  text: Color(0xFF1B2B26),
+  subtext1: Color(0xFF33463F),
+  subtext0: Color(0xFF55685F),
+  overlay2: Color(0xFF73867D),
+  overlay1: Color(0xFF90A198),
+  overlay0: Color(0xFFA9B8B0),
+  surface2: Color(0xFFCFD8CF),
+  surface1: Color(0xFFDFE5DC),
+  surface0: Color(0xFFEBEEE6),
+  accents: _daylightAccents,
+);
+
+/// Deep-sea blue: the original Mawj look.
 const CatppuccinPalette mawjPalette = CatppuccinPalette(
   base: Color(0xFF070D20),
   mantle: Color(0xFF050A19),
@@ -293,12 +348,14 @@ const CatppuccinPalette mochaPalette = CatppuccinPalette(
 
 CatppuccinPalette paletteFor(ThemeFamily family) {
   return switch (family) {
+    ThemeFamily.studio => studioPalette,
+    ThemeFamily.daylight => daylightPalette,
     ThemeFamily.mawj => mawjPalette,
     ThemeFamily.foam => foamPalette,
     ThemeFamily.latte => lattePalette,
     ThemeFamily.frappe => frappePalette,
     ThemeFamily.macchiato => macchiatoPalette,
     ThemeFamily.amoled || ThemeFamily.mocha => mochaPalette,
-    ThemeFamily.system => mawjPalette,
+    ThemeFamily.system => studioPalette,
   };
 }

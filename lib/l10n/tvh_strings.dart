@@ -106,6 +106,13 @@ extension TvhStrings on AppStrings {
   String get version => isArabic ? 'الإصدار' : 'Version';
 
   // Local recording
+  String get allKinds => isArabic ? 'الكل' : 'All';
+  String get tvKind => isArabic ? 'تلفزيون' : 'TV';
+  String get radioKind => isArabic ? 'راديو' : 'Radio';
+  String get abortRecording => isArabic ? 'إجهاض التسجيل' : 'Abort recording';
+  String recordCurrentProgramme(String title) => isArabic
+      ? 'تسجيل البرنامج الحالي: $title'
+      : 'Record current programme: $title';
   String get recordOnServer => isArabic ? 'تسجيل على الخادم' : 'Record on server';
   String get recordOnDevice => isArabic ? 'تسجيل على هذا الجهاز' : 'Record to this device';
   String get stopLocalRecording =>

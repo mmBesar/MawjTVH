@@ -17,32 +17,86 @@ class RecordNowButton extends StatelessWidget {
 
   static const List<int> _minutes = <int>[30, 60, 120, 240];
 
+  // Menu values: >0 minutes, or one of these.
+  static const int _programme = -1;
+  static const int _stop = -2;
+  static const int _abort = -3;
+
   @override
   Widget build(BuildContext context) {
     if (isSyntheticChannel(channel)) {
       return const SizedBox.shrink();
     }
     final strings = context.strings;
-    final state = context.read<AppState>();
+    final state = context.watch<AppState>();
+    final active = state.activeRecordingFor(channel);
+    final now = state.epg.nowFor(channel, DateTime.now());
+    final canRecordProgramme = now != null && now.eventId != null && !now.hasRecording;
+    final error = dark ? const Color(0xFFED8796) : Theme.of(context).colorScheme.error;
     final icon = Icon(
-      Icons.fiber_manual_record_rounded,
-      color: dark ? const Color(0xFFED8796) : Theme.of(context).colorScheme.error,
+      active != null ? Icons.stop_circle_rounded : Icons.fiber_manual_record_rounded,
+      color: error,
     );
+
+    Future<void> onSelected(int value) {
+      switch (value) {
+        case _stop:
+          return runServerAction(
+            context,
+            action: () => state.stopRecording(active!),
+            success: strings.stopRecording,
+            forbidden: strings.recordingsForbidden,
+          );
+        case _abort:
+          return runServerAction(
+            context,
+            action: () => state.cancelRecording(active!),
+            success: strings.abortRecording,
+            forbidden: strings.recordingsForbidden,
+          );
+        case _programme:
+          return runServerAction(
+            context,
+            action: () => state.recordProgramme(now!),
+            success: strings.recordingScheduled,
+            forbidden: strings.recordingsForbidden,
+          );
+        default:
+          return runServerAction(
+            context,
+            action: () => state.recordChannelNow(channel, value),
+            success: strings.recordingStarted,
+            forbidden: strings.recordingsForbidden,
+          );
+      }
+    }
+
     final menu = PopupMenuButton<int>(
-      tooltip: strings.recordOnServer,
+      tooltip: active != null ? strings.stopRecording : strings.recordOnServer,
       icon: icon,
-      onSelected: (minutes) => runServerAction(
-        context,
-        action: () => state.recordChannelNow(channel, minutes),
-        success: strings.recordingStarted,
-        forbidden: strings.recordingsForbidden,
-      ),
+      onSelected: (value) => onSelected(value),
       itemBuilder: (context) => <PopupMenuEntry<int>>[
-        for (final minutes in _minutes)
+        if (active != null) ...<PopupMenuEntry<int>>[
           PopupMenuItem<int>(
-            value: minutes,
-            child: Text(strings.recordNowFor(minutes)),
+            value: _stop,
+            child: Text(strings.stopRecording),
           ),
+          PopupMenuItem<int>(
+            value: _abort,
+            child: Text(strings.abortRecording),
+          ),
+        ] else ...<PopupMenuEntry<int>>[
+          if (canRecordProgramme)
+            PopupMenuItem<int>(
+              value: _programme,
+              child: Text(strings.recordCurrentProgramme(now.title)),
+            ),
+          for (final minutes in _minutes)
+            PopupMenuItem<int>(
+              value: minutes,
+              child: Text(strings.recordNowFor(minutes)),
+            ),
+        ],
       ],
     );
     if (!dark) {

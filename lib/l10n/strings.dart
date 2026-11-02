@@ -192,6 +192,8 @@ class AppStrings {
   String get themeAmoled => 'AMOLED';
   String themeFamilyLabel(ThemeFamily family) => switch (family) {
         ThemeFamily.system => themeSystem,
+        ThemeFamily.studio => isArabic ? 'استوديو' : 'Studio',
+        ThemeFamily.daylight => isArabic ? 'نهار' : 'Daylight',
         ThemeFamily.mawj => themeMawj,
         ThemeFamily.foam => themeFoam,
         ThemeFamily.latte => themeLatte,

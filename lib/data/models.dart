@@ -97,6 +97,9 @@ class SourceConfig {
   }
 }
 
+/// Which kind of channel Watch and Guide show.
+enum MediaFilter { all, tv, radio }
+
 class Channel {
   const Channel({
     required this.id,
@@ -109,6 +112,7 @@ class Channel {
     this.logoUrl,
     this.group,
     this.tags = const <String>[],
+    this.isRadio = false,
   });
 
   /// Stable internal identity, unique per source (the Tvheadend channel uuid).
@@ -126,6 +130,9 @@ class Channel {
 
   /// Every channel tag name this channel belongs to.
   final List<String> tags;
+
+  /// A radio station (audio only), by the server's service type or tag.
+  final bool isRadio;
 
   String get displayNumber => number.isEmpty ? '—' : number;
 }
@@ -288,7 +295,7 @@ class AppSettings {
     required this.language,
     required this.use24HourTime,
     this.activeSourceId,
-    this.useMpvWindow = true,
+    this.useMpvWindow = false,
     this.hwdec = 'auto-safe',
     this.videoOutput = 'auto',
     this.useMpvConfig = false,
@@ -302,8 +309,8 @@ class AppSettings {
   });
 
   factory AppSettings.defaults() => const AppSettings(
-        themeFamily: ThemeFamily.mawj,
-        accent: ThemeAccent.peach,
+        themeFamily: ThemeFamily.studio,
+        accent: ThemeAccent.green,
         language: AppLanguage.system,
         use24HourTime: false,
       );
@@ -413,12 +420,12 @@ class AppSettings {
       themeFamily: _enumByName(
         ThemeFamily.values,
         json['themeFamily'] as String?,
-        ThemeFamily.mawj,
+        ThemeFamily.studio,
       ),
       accent: _enumByName(
         ThemeAccent.values,
         json['accent'] as String?,
-        ThemeAccent.peach,
+        ThemeAccent.green,
       ),
       language: _enumByName(
         AppLanguage.values,
@@ -427,7 +434,7 @@ class AppSettings {
       ),
       use24HourTime: json['use24HourTime'] as bool? ?? false,
       activeSourceId: json['activeSourceId'] as String?,
-      useMpvWindow: json['useMpvWindow'] as bool? ?? true,
+      useMpvWindow: json['useMpvWindow'] as bool? ?? false,
       hwdec: json['hwdec'] as String? ?? 'auto-safe',
       videoOutput: json['videoOutput'] as String? ?? 'auto',
       useMpvConfig: json['useMpvConfig'] as bool? ?? false,

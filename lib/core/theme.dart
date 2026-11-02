@@ -173,7 +173,7 @@ ThemeData buildMawjTVHTheme({
   }
 
   final resolvedFamily = family == ThemeFamily.system
-      ? (brightness == Brightness.dark ? ThemeFamily.mawj : ThemeFamily.foam)
+      ? (brightness == Brightness.dark ? ThemeFamily.studio : ThemeFamily.daylight)
       : family;
   final amoled = resolvedFamily == ThemeFamily.amoled;
   final palette = paletteFor(resolvedFamily);

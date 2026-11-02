@@ -17,6 +17,7 @@ import '../widgets/channel_row.dart';
 import '../widgets/channel_tile.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_banner.dart';
+import '../widgets/media_filter.dart';
 import '../widgets/source_switcher.dart';
 import '../widgets/warnings_panel.dart';
 import '../widgets/wave.dart';
@@ -144,6 +145,12 @@ class _WatchPageState extends State<WatchPage> {
                         : (constraints.maxWidth * 0.86)
                             .clamp(260.0, 440.0)
                             .toDouble(),
+                  ),
+                ),
+              if (state.hasRadio)
+                SliverToBoxAdapter(
+                  child: MediaFilterChips(
+                    padding: EdgeInsets.fromLTRB(sidePadding, 4, sidePadding, 0),
                   ),
                 ),
               if (state.groups.isNotEmpty || state.favorites.isNotEmpty)

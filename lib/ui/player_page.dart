@@ -1158,17 +1158,6 @@ class _PlayerPageState extends State<PlayerPage> {
                         ),
                       ),
                       _RoundButton(
-                        tooltip: favorite
-                            ? strings.removeFavorite
-                            : strings.addFavorite,
-                        icon: favorite
-                            ? Icons.star_rounded
-                            : Icons.star_outline_rounded,
-                        color: favorite ? colors.accent : Colors.white,
-                        onPressed: () =>
-                            unawaited(state.toggleFavorite(_channel)),
-                      ),
-                      _RoundButton(
                         tooltip: strings.diagnostics,
                         icon: Icons.monitor_heart_outlined,
                         onPressed: () => unawaited(_showDiagnostics()),
@@ -1243,13 +1232,24 @@ class _PlayerPageState extends State<PlayerPage> {
             ),
             // Recording buttons, bottom end: the top bar is too crowded on a
             // phone held upright.
-            if (!isSyntheticChannel(_channel))
-              PositionedDirectional(
-                bottom: 8 + padding.bottom + (showStrip ? 132 : 0),
-                end: 8 + padding.right,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
+            PositionedDirectional(
+              bottom: 8 + padding.bottom + (showStrip ? 132 : 0),
+              end: 8 + padding.right,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  _RoundButton(
+                    tooltip: favorite
+                        ? strings.removeFavorite
+                        : strings.addFavorite,
+                    icon: favorite
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    color: favorite ? colors.accent : Colors.white,
+                    onPressed: () => unawaited(state.toggleFavorite(_channel)),
+                  ),
+                  if (!isSyntheticChannel(_channel)) ...<Widget>[
+                    const SizedBox(width: 8),
                     RecordNowButton(channel: _channel),
                     const SizedBox(width: 8),
                     LocalRecordButton(
@@ -1257,8 +1257,9 @@ class _PlayerPageState extends State<PlayerPage> {
                       onPressed: () => unawaited(_toggleLocalRecording()),
                     ),
                   ],
-                ),
+                ],
               ),
+            ),
             if (immersive)
               Align(
                 alignment: Alignment.bottomCenter,

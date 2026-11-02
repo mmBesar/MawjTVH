@@ -12,6 +12,7 @@ import '../../l10n/tvh_strings.dart';
 import '../player_page.dart';
 import '../widgets/channel_logo.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/media_filter.dart';
 import '../widgets/programme_sheet.dart';
 import '../widgets/warnings_panel.dart';
 import 'channel_guide_page.dart';
@@ -260,6 +261,9 @@ class _GuidePageState extends State<GuidePage> {
                 Icon(Icons.zoom_in_rounded, size: 20, color: colors.subtext0),
               ],
             ),
+          ),
+          const MediaFilterChips(
+            padding: EdgeInsets.symmetric(horizontal: 16),
           ),
           if (state.groups.isNotEmpty)
             SizedBox(
@@ -696,9 +700,13 @@ class _Block extends StatelessWidget {
                         height: 1.2,
                       ),
                     ),
-                    if (roomy && programme.subTitle != null)
+                    if (roomy &&
+                        (programme.episode != null || programme.subTitle != null))
                       BidiText(
-                        programme.subTitle!,
+                        <String>[
+                          if (programme.episode != null) programme.episode!,
+                          if (programme.subTitle != null) programme.subTitle!,
+                        ].join(' · '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.labelSmall?.copyWith(

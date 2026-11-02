@@ -231,6 +231,7 @@ class HtspBackend {
           logoUrl: _address.imageUrl(channel.icon, user: _user, pass: _pass),
           group: names.isEmpty ? null : names.first,
           tags: names,
+          isRadio: channel.radio || names.any(looksLikeRadioTag),
         ),
       );
     }
@@ -275,22 +276,36 @@ class HtspBackend {
       final summary = _string(event['summary']);
       final description = _string(event['description']);
       final subtitle = _string(event['subtitle']);
+      final onscreen = _string(event['episodeOnscreen']);
       final season = _int(event['seasonNumber']);
       final episode = _int(event['episodeNumber']);
-      final label = <String>[
-        if (season != null && season > 0) 'S$season',
-        if (episode != null && episode > 0) 'E$episode',
-      ].join(' ');
+      final part = _int(event['partNumber']);
+      final label = onscreen.isNotEmpty
+          ? onscreen
+          : <String>[
+              if (season != null && season > 0)
+                'S${season.toString().padLeft(2, '0')}',
+              if (episode != null && episode > 0)
+                'E${episode.toString().padLeft(2, '0')}',
+              if (part != null && part > 0) 'P$part',
+            ].join();
       final categories = <String>[];
       final rawCategory = event['category'];
       if (rawCategory is List) {
         categories.addAll(rawCategory.whereType<String>());
       }
       final year = _int(event['year']);
+      final age = _int(event['ageRating']);
+      final stars = _int(event['starRating']);
       final facts = <String>[
         if (year != null && year > 0) '$year',
         ...categories,
+        if (age != null && age > 0) '$age+',
+        if (stars != null && stars > 0) '★ ${(stars / 10).toStringAsFixed(1)}',
+        if (event['hd'] == 1) 'HD',
+        if (event['subtitled'] == 1) 'CC',
       ].join(' · ');
+      final credits = _creditsLine(event['credits']);
       (byChannel['$channelId'] ??= <Programme>[]).add(
         Programme(
           channelId: '$channelId',
@@ -314,6 +329,7 @@ class HtspBackend {
           dvrUuid: dvr == null ? null : '$dvrId',
           dvrState: dvr == null ? null : _string(dvr['state']),
           facts: facts.isEmpty ? null : facts,
+          credits: credits,
         ),
       );
     }
@@ -523,14 +539,26 @@ class _HtspChannel {
     required this.number,
     required this.icon,
     required this.tags,
+    required this.radio,
   });
 
   factory _HtspChannel.fromMessage(Map<String, Object?> message) {
     final rawTags = message['tags'];
+    var radio = false;
+    final services = message['services'];
+    if (services is List && services.isNotEmpty) {
+      // Radio when every service of the channel is audio only.
+      radio = services.every(
+        (service) =>
+            service is Map &&
+            _string(service['type']).toLowerCase() == 'radio',
+      );
+    }
     return _HtspChannel(
       id: _int(message['channelId'])!,
       name: _string(message['channelName']),
       number: _int(message['channelNumber']) ?? 0,
+      radio: radio,
       icon: _string(message['channelIcon']),
       tags: <int>[
         if (rawTags is List)
@@ -545,6 +573,7 @@ class _HtspChannel {
   final int number;
   final String icon;
   final List<int> tags;
+  final bool radio;
 }
 
 class _HtspTag {
@@ -574,4 +603,46 @@ String _string(Object? value) => value is String ? value : '';
 double? _percent(Object? value) {
   final number = _int(value);
   return number == null ? null : TvhSignal.relativeToPercent(number);
+}
+
+/// Tag names that mark radio stations ("Radio", "Radio channels", Arabic...).
+bool looksLikeRadioTag(String name) {
+  final lower = name.toLowerCase();
+  return lower.contains('radio') ||
+      name.contains('راديو') ||
+      name.contains('إذاعة') ||
+      name.contains('اذاعة');
+}
+
+/// `credits` is a map of name to role; group the names by role.
+String? _creditsLine(Object? raw) {
+  if (raw is! Map || raw.isEmpty) {
+    return null;
+  }
+  final byRole = <String, List<String>>{};
+  raw.forEach((name, role) {
+    if (name is String && name.isNotEmpty) {
+      final key = role is String && role.isNotEmpty ? role : 'actor';
+      (byRole[key] ??= <String>[]).add(name);
+    }
+  });
+  if (byRole.isEmpty) {
+    return null;
+  }
+  String title(String role) =>
+      role.isEmpty ? role : role[0].toUpperCase() + role.substring(1);
+  final order = <String>[
+    'director',
+    'presenter',
+    'writer',
+    'actor',
+    ...byRole.keys.where(
+      (r) => !<String>['director', 'presenter', 'writer', 'actor'].contains(r),
+    ),
+  ];
+  return <String>[
+    for (final role in order)
+      if (byRole.containsKey(role))
+        '${title(role)}: ${byRole[role]!.take(6).join(', ')}',
+  ].join(' · ');
 }

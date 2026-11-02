@@ -445,13 +445,13 @@ class _Codec {
     this.streamType, {
     this.video = false,
     this.privateStream = false,
-    this.descriptor = const <int>[],
   });
 
   final int streamType;
   final bool video;
   final bool privateStream;
-  final List<int> descriptor;
+
+  List<int> get descriptor => const <int>[];
 }
 
 class _Track {

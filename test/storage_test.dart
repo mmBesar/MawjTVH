@@ -55,7 +55,7 @@ void main() {
     });
     final storage = await StorageService.create();
 
-    expect(storage.loadSettings().themeFamily, ThemeFamily.mawj);
+    expect(storage.loadSettings().themeFamily, ThemeFamily.studio);
     expect(storage.loadSources(), isEmpty);
   });
 

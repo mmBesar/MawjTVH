@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.2
+
+- One HTSP subscription per channel, shared by the player and local recording.
+- Server record button turns into Stop / Abort while the channel records, and can record the current programme.
+- Radio stations: All / TV / Radio filter on Watch and Guide.
+- Guide shows episode numbers; HTSP guide carries more detail (credits, rating, year, HD).
+- New default look "Studio" (pine-black, broadcast green) and "Daylight"; Mawj and the others stay as options.
+- Desktop plays in the app by default (the separate mpv window stays an option).
+- Favourite star moved to the bottom row on Android so nothing covers it.
+
 ## 0.1.1
 
 - Native HTSP protocol (optional per server): live channels, groups, guide and recordings pushed by the server; recording actions over HTSP.

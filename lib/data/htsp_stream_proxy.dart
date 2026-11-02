@@ -29,6 +29,7 @@ class HtspStreamProxy {
 
   HttpServer? _server;
   int _nextSubscription = 100;
+  final Map<int, _Feed> _feeds = <int, _Feed>{};
 
   /// Binds the loopback server. Throws if it cannot.
   Future<void> start() async {
@@ -45,6 +46,9 @@ class HtspStreamProxy {
   Future<void> close() async {
     final server = _server;
     _server = null;
+    for (final feed in _feeds.values.toList()) {
+      feed.stop();
+    }
     await server?.close(force: true);
   }
 
@@ -63,11 +67,14 @@ class HtspStreamProxy {
       ..bufferOutput = false
       ..headers.contentType = ContentType('video', 'mp2t')
       ..headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+    final feed = _feeds.putIfAbsent(channel, () => _Feed(this, channel));
+    feed.attach(response);
     try {
-      await _Session(this, channel, response).run();
+      await response.done;
     } catch (_) {
       // The player went away; nothing to report.
     } finally {
+      feed.detach(response);
       try {
         await response.close();
       } catch (_) {}
@@ -75,15 +82,21 @@ class HtspStreamProxy {
   }
 }
 
-class _Session {
-  _Session(this.proxy, this.channel, this.response);
+/// One HTSP subscription per channel, shared by every player connection that
+/// asks for the channel (mpv often opens a stream twice, and a local recording
+/// opens it again), so the server sees a single subscription.
+class _Feed {
+  _Feed(this.proxy, this.channel);
 
   final HtspStreamProxy proxy;
   final int channel;
-  final HttpResponse response;
   final TsMuxer _mux = TsMuxer();
+  final List<HttpResponse> _clients = <HttpResponse>[];
 
-  bool _gone = false;
+  bool _running = false;
+  bool _stopped = false;
+  Timer? _idle;
+  Completer<void>? _current;
   bool _rebase = false;
   int _offset = 0;
   int _lastTs = 0;
@@ -93,11 +106,44 @@ class _Session {
 
   HtspConnection get _connection => proxy._connection;
 
+  void attach(HttpResponse response) {
+    _idle?.cancel();
+    _clients.add(response);
+    if (_mux.isConfigured) {
+      try {
+        response.add(_mux.tables());
+      } catch (_) {}
+    }
+    if (!_running && !_stopped) {
+      _running = true;
+      unawaited(run());
+    }
+  }
+
+  void detach(HttpResponse response) {
+    _clients.remove(response);
+    if (_clients.isEmpty) {
+      _idle?.cancel();
+      _idle = Timer(const Duration(seconds: 4), () {
+        if (_clients.isEmpty) {
+          stop();
+        }
+      });
+    }
+  }
+
+  void stop() {
+    _stopped = true;
+    _idle?.cancel();
+    final current = _current;
+    if (current != null && !current.isCompleted) {
+      current.complete();
+    }
+    proxy._feeds.remove(channel);
+  }
+
   Future<void> run() async {
-    unawaited(response.done.then((_) => _gone = true, onError: (Object _) {
-      _gone = true;
-    }));
-    // Keep the player's connection busy while the signal is away.
+    // Keep the players' connections busy while the signal is away.
     _keepAlive = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_mux.isConfigured &&
           DateTime.now().difference(_lastWrite) > const Duration(milliseconds: 900)) {
@@ -106,9 +152,9 @@ class _Session {
     });
     var failures = 0;
     try {
-      while (!_gone && !_connection.isClosed) {
+      while (!_stopped && !_connection.isClosed) {
         final delivered = await _subscribeOnce();
-        if (_gone) {
+        if (_stopped) {
           break;
         }
         failures = delivered ? 0 : failures + 1;
@@ -121,25 +167,32 @@ class _Session {
       }
     } finally {
       _keepAlive?.cancel();
+      _running = false;
+      stop();
+      for (final client in _clients.toList()) {
+        try {
+          await client.close();
+        } catch (_) {}
+      }
     }
   }
 
   void _write(Uint8List bytes) {
-    if (_gone) {
-      return;
+    for (final client in _clients.toList()) {
+      try {
+        client.add(bytes);
+      } catch (_) {
+        _clients.remove(client);
+      }
     }
-    try {
-      response.add(bytes);
-      _lastWrite = DateTime.now();
-    } catch (_) {
-      _gone = true;
-    }
+    _lastWrite = DateTime.now();
   }
 
   /// One subscription; returns true if it delivered any media.
   Future<bool> _subscribeOnce() async {
     final id = proxy._nextSubscription++;
     final finished = Completer<void>();
+    _current = finished;
     var delivered = false;
     var unit90k = true;
     Timer? watchdog;
@@ -261,10 +314,7 @@ class _Session {
       });
       unit90k = reply['90khz'] != 0;
       arm(const Duration(seconds: 15));
-      await Future.any<void>(<Future<void>>[
-        finished.future,
-        response.done.then((_) {}, onError: (Object _) {}),
-      ]);
+      await finished.future;
     } on HtspException {
       // Refused or connection trouble: the caller waits and retries.
     } finally {

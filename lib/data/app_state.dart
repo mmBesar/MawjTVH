@@ -99,13 +99,39 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The channels of the chosen group (all when none is chosen).
+  MediaFilter _media = MediaFilter.all;
+
+  MediaFilter get mediaFilter => hasRadio ? _media : MediaFilter.all;
+
+  /// True when the server has radio stations.
+  bool get hasRadio => channels.any((channel) => channel.isRadio);
+
+  void setMediaFilter(MediaFilter value) {
+    if (_media == value) {
+      return;
+    }
+    _media = value;
+    notifyListeners();
+  }
+
+  /// The channels of the chosen group and kind (everything when none is
+  /// chosen).
   List<Channel> get filteredChannels {
     final group = groupFilter;
-    if (group == null) {
+    final media = mediaFilter;
+    if (group == null && media == MediaFilter.all) {
       return channels;
     }
-    return channels.where((channel) => channel.group == group).toList(growable: false);
+    return channels.where((channel) {
+      if (group != null && channel.group != group) {
+        return false;
+      }
+      return switch (media) {
+        MediaFilter.all => true,
+        MediaFilter.tv => !channel.isRadio,
+        MediaFilter.radio => channel.isRadio,
+      };
+    }).toList(growable: false);
   }
 
   bool isFavorite(Channel channel) => _favorites.contains(channel.id);
@@ -548,6 +574,16 @@ class AppState extends ChangeNotifier {
           if (recording.isRecording && recording.channelUuid.isNotEmpty)
             recording.channelUuid,
       };
+
+  /// The server recording that is running on [channel] right now, if any.
+  TvhRecording? activeRecordingFor(Channel channel) {
+    for (final recording in _recordings) {
+      if (recording.isRecording && recording.channelUuid == channel.id) {
+        return recording;
+      }
+    }
+    return null;
+  }
 
   bool isRecordingChannel(Channel channel) =>
       _recordings.any(
