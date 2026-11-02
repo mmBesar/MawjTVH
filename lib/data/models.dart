@@ -180,6 +180,10 @@ class Programme {
   /// One line of credits: directors, cast.
   final String? credits;
 
+  /// Title with the episode label, e.g. `Foo · S01E05`, for lists.
+  String get displayTitle =>
+      episode == null || episode!.isEmpty ? title : '$title · $episode';
+
   bool get hasRecording => dvrUuid != null && dvrUuid!.isNotEmpty;
 
   bool isLiveAt(DateTime now) => !now.isBefore(start) && now.isBefore(stop);
@@ -298,7 +302,7 @@ class AppSettings {
     this.useMpvWindow = false,
     this.hwdec = 'auto-safe',
     this.videoOutput = 'auto',
-    this.useMpvConfig = false,
+    this.useMpvConfig = true,
     this.startFullscreen = false,
     this.mpvPath = '',
     this.autoRefreshMinutes = 360,
@@ -306,6 +310,7 @@ class AppSettings {
     this.recordDir = '',
     this.richVisuals = true,
     this.reduceMotion = false,
+    this.inAppRenderer = 'auto',
   });
 
   factory AppSettings.defaults() => const AppSettings(
@@ -356,6 +361,9 @@ class AppSettings {
   /// Turns off decorative animation (the moving progress waves).
   final bool reduceMotion;
 
+  /// Linux in-app video: `auto`, `gpu` or `cpu`.
+  final String inAppRenderer;
+
   AppSettings copyWith({
     ThemeFamily? themeFamily,
     ThemeAccent? accent,
@@ -373,6 +381,7 @@ class AppSettings {
     String? recordDir,
     bool? richVisuals,
     bool? reduceMotion,
+    String? inAppRenderer,
   }) {
     return AppSettings(
       themeFamily: themeFamily ?? this.themeFamily,
@@ -393,6 +402,7 @@ class AppSettings {
       recordDir: recordDir ?? this.recordDir,
       richVisuals: richVisuals ?? this.richVisuals,
       reduceMotion: reduceMotion ?? this.reduceMotion,
+      inAppRenderer: inAppRenderer ?? this.inAppRenderer,
     );
   }
 
@@ -413,6 +423,7 @@ class AppSettings {
         'recordDir': recordDir,
         'richVisuals': richVisuals,
         'reduceMotion': reduceMotion,
+        'inAppRenderer': inAppRenderer,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -437,7 +448,7 @@ class AppSettings {
       useMpvWindow: json['useMpvWindow'] as bool? ?? false,
       hwdec: json['hwdec'] as String? ?? 'auto-safe',
       videoOutput: json['videoOutput'] as String? ?? 'auto',
-      useMpvConfig: json['useMpvConfig'] as bool? ?? false,
+      useMpvConfig: json['useMpvConfig'] as bool? ?? true,
       startFullscreen: json['startFullscreen'] as bool? ?? false,
       mpvPath: json['mpvPath'] as String? ?? '',
       autoRefreshMinutes: json['autoRefreshMinutes'] as int? ?? 360,
@@ -445,6 +456,7 @@ class AppSettings {
       recordDir: json['recordDir'] as String? ?? '',
       richVisuals: json['richVisuals'] as bool? ?? true,
       reduceMotion: json['reduceMotion'] as bool? ?? false,
+      inAppRenderer: json['inAppRenderer'] as String? ?? 'auto',
     );
   }
 }

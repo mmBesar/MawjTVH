@@ -199,7 +199,7 @@ class _ChannelTileState extends State<ChannelTile> {
                     ),
                     const SizedBox(height: 2),
                     BidiText(
-                      programme?.title ??
+                      programme?.displayTitle ??
                           widget.channel.group ??
                           strings.noProgrammeInfo,
                       maxLines: 1,

@@ -106,6 +106,13 @@ extension TvhStrings on AppStrings {
   String get version => isArabic ? 'الإصدار' : 'Version';
 
   // Local recording
+  String get inAppRenderer => isArabic ? 'عرض الفيديو داخل التطبيق' : 'In-app video rendering';
+  String get rendererAuto => isArabic ? 'تلقائي (GPU)' : 'Automatic (GPU)';
+  String get rendererGpu => isArabic ? 'GPU (الأسلس)' : 'GPU (smoothest)';
+  String get rendererCpu => isArabic ? 'CPU (الأكثر أمانًا)' : 'CPU (safest)';
+  String get inAppRendererHelp => isArabic
+      ? 'إن تجمّدت النافذة أثناء التشغيل اختر CPU. يُطبَّق عند فتح القناة التالية.'
+      : 'If the window freezes while playing, choose CPU. Applies the next time you open a channel.';
   String get audioTracks => isArabic ? 'المسارات الصوتية' : 'Audio';
   String get subtitleTracks => isArabic ? 'الترجمة' : 'Subtitles';
   String get subtitlesOff => isArabic ? 'بدون ترجمة' : 'Off';

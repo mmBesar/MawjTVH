@@ -138,7 +138,7 @@ class ChannelRow extends StatelessWidget {
                       const SizedBox(height: 2),
                       if (current != null) ...<Widget>[
                         BidiText(
-                          current.title,
+                          current.displayTitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodyMedium?.copyWith(

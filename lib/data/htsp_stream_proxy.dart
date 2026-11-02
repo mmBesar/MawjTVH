@@ -40,6 +40,9 @@ class HtspStreamProxy {
 
   bool get isRunning => _server != null;
 
+  /// True while a player is watching [channelId] through this proxy.
+  bool isActive(int channelId) => _feeds.containsKey(channelId);
+
   String urlFor(String channelId) =>
       'http://127.0.0.1:${_server!.port}/live/$channelId';
 

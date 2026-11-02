@@ -9,6 +9,10 @@
 - New default look "Studio" (pine-black, broadcast green) and "Daylight"; Mawj and the others stay as options.
 - Desktop plays in the app by default (the separate mpv window stays an option).
 - Audio & subtitles picker with real language names; DVB subtitles are carried through the HTSP stream.
+- Desktop: a proper control bar (title bar, one bottom bar, volume slider); in-app video uses the GPU path by default (setting + MAWJTVH_RENDERER=cpu to go back); the system mpv window now uses your own mpv config and defaults.
+- Episode numbers on every list (channels, channel guide, search, player).
+- Signal no longer opens a second HTSP subscription while you watch.
+- Darker green in Studio and Daylight.
 - Favourite star moved to the bottom row on Android so nothing covers it.
 
 ## 0.1.1

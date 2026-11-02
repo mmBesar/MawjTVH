@@ -289,27 +289,23 @@ class MpvRuntime {
     required bool useUserConfig,
     required bool fullscreen,
   }) {
+    // The person's own mpv is used as it is: their mpv.conf, scripts and
+    // defaults apply. Only what the app has to control is passed, and the
+    // decoder/output only when they were changed away from "automatic".
     final chosenHwdec =
-        capabilities.hwdecs.isEmpty || capabilities.hwdecs.contains(hwdec)
+        hwdec != 'auto-safe' &&
+                (capabilities.hwdecs.isEmpty || capabilities.hwdecs.contains(hwdec))
             ? hwdec
-            : 'auto-safe';
+            : null;
     return <String>[
       if (!useUserConfig) '--no-config',
       '--force-window=yes',
       '--title=$title',
       '--user-agent=$kMawjUserAgent',
-      '--hwdec=$chosenHwdec',
+      if (chosenHwdec != null) '--hwdec=$chosenHwdec',
       if (videoOutput != 'auto') '--vo=$videoOutput',
-      // ErsatzTV segments use unusual extensions; ffmpeg refuses them unless
-      // told otherwise. mpv itself does not set `strict=experimental`.
-      '--demuxer-lavf-o=allowed_extensions=ALL,seg_max_retry=5',
-      '--cache=yes',
-      '--cache-secs=30',
-      '--demuxer-max-bytes=64MiB',
-      '--network-timeout=60',
-      '--tls-verify=${allowInsecure ? 'no' : 'yes'}',
+      if (allowInsecure) '--tls-verify=no',
       '--ytdl=no',
-      '--keep-open=yes',
       '--input-ipc-server=$ipcPath',
       '--input-terminal=no',
       '--term-status-msg=',

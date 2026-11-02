@@ -10,10 +10,18 @@ import 'record_actions.dart';
 /// Starts a one-off recording of [channel] on the server, from now for a
 /// chosen length.
 class RecordNowButton extends StatelessWidget {
-  const RecordNowButton({super.key, required this.channel, this.dark = true});
+  const RecordNowButton({
+    super.key,
+    required this.channel,
+    this.dark = true,
+    this.plain = false,
+  });
 
   final Channel channel;
   final bool dark;
+
+  /// No round backdrop: for a control bar that already has one.
+  final bool plain;
 
   static const List<int> _minutes = <int>[30, 60, 120, 240];
 
@@ -99,7 +107,7 @@ class RecordNowButton extends StatelessWidget {
         ],
       ],
     );
-    if (!dark) {
+    if (!dark || plain) {
       return menu;
     }
     return Material(
@@ -118,11 +126,13 @@ class LocalRecordButton extends StatelessWidget {
     required this.recording,
     required this.onPressed,
     this.dark = true,
+    this.plain = false,
   });
 
   final bool recording;
   final VoidCallback onPressed;
   final bool dark;
+  final bool plain;
 
   @override
   Widget build(BuildContext context) {
@@ -131,10 +141,10 @@ class LocalRecordButton extends StatelessWidget {
     final button = IconButton(
       tooltip: recording ? strings.stopLocalRecording : strings.recordOnDevice,
       onPressed: onPressed,
-      color: recording ? error : (dark ? Colors.white : null),
+      color: recording ? error : (dark || plain ? Colors.white : null),
       icon: Icon(recording ? Icons.stop_circle_rounded : Icons.save_alt_rounded),
     );
-    if (!dark) {
+    if (!dark || plain) {
       return button;
     }
     return Material(

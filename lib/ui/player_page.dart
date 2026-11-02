@@ -111,6 +111,20 @@ class _PlayerPageState extends State<PlayerPage> {
 
   /// `MAWJTVH_HWDEC=auto-copy-safe` lets Linux try GPU decoding while keeping
   /// the software renderer. The default is the safe CPU decoder.
+  /// Linux in-app rendering: the GPU path is smooth; the CPU path is the
+  /// safe fallback (an old Wayland/Mesa combination froze on GPU).
+  static bool _gpuRenderer(String choice) {
+    if (!Platform.isLinux) {
+      return true;
+    }
+    // MAWJTVH_RENDERER=cpu is a way back if the window ever freezes.
+    final forced = (Platform.environment['MAWJTVH_RENDERER'] ?? '').trim();
+    final pick = forced.isNotEmpty ? forced : choice;
+    return pick != 'cpu';
+  }
+
+  late final bool _gpu;
+
   static String _linuxHwdec() {
     try {
       final value = (Platform.environment['MAWJTVH_HWDEC'] ?? '').trim();
@@ -164,6 +178,7 @@ class _PlayerPageState extends State<PlayerPage> {
   void initState() {
     super.initState();
     _channel = widget.channel;
+    _gpu = _gpuRenderer(context.read<AppState>().settings.inAppRenderer);
     _player = Player(
       configuration: PlayerConfiguration(
         title: 'MawjTVH — ${_channel.name}',
@@ -177,9 +192,9 @@ class _PlayerPageState extends State<PlayerPage> {
         // media_kit 2.0.1 renders Linux video through an isolated EGL context
         // that can stall on Wayland/Mesa and take the UI with it, so Linux
         // uses the CPU upload path. Android keeps the hardware path.
-        enableHardwareAcceleration: !Platform.isLinux,
-        width: Platform.isLinux ? _softwareStartWidth : null,
-        height: Platform.isLinux ? _softwareStartHeight : null,
+        enableHardwareAcceleration: _gpu,
+        width: Platform.isLinux && !_gpu ? _softwareStartWidth : null,
+        height: Platform.isLinux && !_gpu ? _softwareStartHeight : null,
       ),
     );
     _volume = _player.state.volume;
@@ -309,9 +324,9 @@ class _PlayerPageState extends State<PlayerPage> {
     try {
       await _setMpvProperty(
         'hwdec',
-        Platform.isLinux ? _linuxHwdec() : 'auto-safe',
+        Platform.isLinux && !_gpu ? _linuxHwdec() : 'auto-safe',
       );
-      if (Platform.isLinux) {
+      if (Platform.isLinux && !_gpu) {
         // Everything after decoding runs on the CPU: decode on all cores and
         // use the cheapest colour conversion and scaler.
         await _setMpvProperty('vd-lavc-threads', '0');
@@ -1075,6 +1090,236 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
+  /// Desktop layout: a slim title bar and one control bar along the bottom,
+  /// like a desktop player, instead of the large touch buttons.
+  Widget _desktopControls(AppState state, Programme? current) {
+    final strings = context.strings;
+    final colors = context.mawjColors;
+    final favorite = state.isFavorite(_channel);
+    final use24 = state.settings.use24HourTime;
+    const white = Colors.white;
+
+    Widget icon(
+      IconData data,
+      String tooltip,
+      VoidCallback onPressed, {
+      Color color = white,
+    }) {
+      return IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        icon: Icon(data, color: color),
+        iconSize: 22,
+        visualDensity: VisualDensity.compact,
+        splashRadius: 20,
+      );
+    }
+
+    return IgnorePointer(
+      ignoring: !_controlsVisible,
+      child: AnimatedOpacity(
+        opacity: _controlsVisible ? 1 : 0,
+        duration: const Duration(milliseconds: 160),
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            Align(
+              alignment: Alignment.topCenter,
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: <Color>[Color(0xB3000000), Color(0x00000000)],
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 22),
+                  child: Row(
+                    children: <Widget>[
+                      icon(Icons.arrow_back_rounded, strings.back, () {
+                        if (_fullscreen) {
+                          unawaited(_toggleFullscreen());
+                        } else {
+                          Navigator.of(context).maybePop();
+                        }
+                      }),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: BidiText(
+                          '${_channel.displayNumber}  ${_channel.name}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Flexible(child: SignalBadge(channel: _channel)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: <Color>[Color(0xCC000000), Color(0x00000000)],
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 34, 12, 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      if (current != null) ...<Widget>[
+                        Row(
+                          children: <Widget>[
+                            Flexible(
+                              child: BidiText(
+                                current.displayTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              strings.formatRange(
+                                current.start,
+                                current.stop,
+                                use24HourTime: use24,
+                              ),
+                              style: TextStyle(
+                                color: white.withValues(alpha: 0.7),
+                                fontSize: 12,
+                                fontFeatures: const <FontFeature>[
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          child: LinearProgressIndicator(
+                            value: current.progressAt(state.now),
+                            minHeight: 3,
+                            color: colors.accent,
+                            backgroundColor: Colors.white24,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                      Row(
+                        children: <Widget>[
+                          icon(Icons.skip_previous_rounded, strings.previousChannel,
+                              () => _zap(-1)),
+                          icon(
+                            _playing
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                            _playing ? strings.pause : strings.play,
+                            () => unawaited(_player.playOrPause()),
+                          ),
+                          icon(Icons.skip_next_rounded, strings.nextChannel,
+                              () => _zap(1)),
+                          StreamBuilder<double>(
+                            stream: _player.stream.volume,
+                            initialData: _player.state.volume,
+                            builder: (context, snapshot) {
+                              final volume =
+                                  snapshot.data ?? _player.state.volume;
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  icon(
+                                    volume <= 0.01
+                                        ? Icons.volume_off_rounded
+                                        : Icons.volume_up_rounded,
+                                    volume <= 0.01 ? strings.unmute : strings.mute,
+                                    _toggleMute,
+                                  ),
+                                  SizedBox(
+                                    width: 110,
+                                    child: SliderTheme(
+                                      data: SliderTheme.of(context).copyWith(
+                                        trackHeight: 3,
+                                        thumbShape: const RoundSliderThumbShape(
+                                          enabledThumbRadius: 6,
+                                        ),
+                                        overlayShape:
+                                            SliderComponentShape.noOverlay,
+                                      ),
+                                      child: Slider(
+                                        value: volume.clamp(0.0, 100.0).toDouble(),
+                                        max: 100,
+                                        onChanged: (value) =>
+                                            unawaited(_player.setVolume(value)),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                          const Spacer(),
+                          icon(
+                            favorite
+                                ? Icons.star_rounded
+                                : Icons.star_outline_rounded,
+                            favorite ? strings.removeFavorite : strings.addFavorite,
+                            () => unawaited(state.toggleFavorite(_channel)),
+                            color: favorite ? colors.accent : white,
+                          ),
+                          if (!isSyntheticChannel(_channel)) ...<Widget>[
+                            RecordNowButton(channel: _channel, plain: true),
+                            LocalRecordButton(
+                              recording: _localRecording,
+                              plain: true,
+                              onPressed: () =>
+                                  unawaited(_toggleLocalRecording()),
+                            ),
+                          ],
+                          icon(Icons.subtitles_rounded, strings.audioAndSubtitles,
+                              () => unawaited(showTrackSheet(context, _player))),
+                          icon(Icons.monitor_heart_outlined, strings.diagnostics,
+                              () => unawaited(_showDiagnostics())),
+                          icon(
+                            _fullscreen
+                                ? Icons.fullscreen_exit_rounded
+                                : Icons.fullscreen_rounded,
+                            _fullscreen
+                                ? strings.exitFullScreen
+                                : strings.fullScreen,
+                            () => unawaited(_toggleFullscreen()),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildControls(
     AppState state, {
     required bool immersive,
@@ -1087,6 +1332,10 @@ class _PlayerPageState extends State<PlayerPage> {
     final showStrip = immersive && constraints.maxHeight >= 420;
     final allowInsecure = state.activeSource?.allowInsecureCerts ?? false;
     final current = state.epg.nowFor(_channel, state.now);
+
+    if (kIsDesktop) {
+      return _desktopControls(state, current);
+    }
 
     return IgnorePointer(
       ignoring: !_controlsVisible,
@@ -1156,13 +1405,6 @@ class _PlayerPageState extends State<PlayerPage> {
                               ],
                             ),
                           ],
-                        ),
-                      ),
-                      _RoundButton(
-                        tooltip: strings.audioAndSubtitles,
-                        icon: Icons.subtitles_rounded,
-                        onPressed: () => unawaited(
-                          showTrackSheet(context, _player),
                         ),
                       ),
                       _RoundButton(
@@ -1247,6 +1489,12 @@ class _PlayerPageState extends State<PlayerPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   _RoundButton(
+                    tooltip: strings.audioAndSubtitles,
+                    icon: Icons.subtitles_rounded,
+                    onPressed: () => unawaited(showTrackSheet(context, _player)),
+                  ),
+                  const SizedBox(width: 8),
+                  _RoundButton(
                     tooltip: favorite
                         ? strings.removeFavorite
                         : strings.addFavorite,
@@ -1292,7 +1540,7 @@ class _PlayerPageState extends State<PlayerPage> {
                       children: <Widget>[
                         if (current != null) ...<Widget>[
                           BidiText(
-                            current.title,
+                            current.displayTitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -1402,7 +1650,7 @@ class PlayerInfoPanel extends StatelessWidget {
           const SizedBox(height: 20),
           if (current != null) ...<Widget>[
             BidiText(
-              current.title,
+              current.displayTitle,
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w800,
                 height: 1.2,
@@ -1498,7 +1746,7 @@ class PlayerInfoPanel extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         BidiText(
-                          next.title,
+                          next.displayTitle,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodyMedium?.copyWith(

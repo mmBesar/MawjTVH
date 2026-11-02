@@ -427,6 +427,11 @@ class HtspBackend {
       // The stream proxy is already receiving this channel's signal.
       return live.signal;
     }
+    if (_proxy?.isActive(channel) ?? false) {
+      // The stream itself carries the signal; never open a second
+      // subscription for it.
+      return live?.signal;
+    }
     _signalIdle?.cancel();
     _signalIdle = Timer(const Duration(seconds: 20), () {
       unawaited(_stopSignal());

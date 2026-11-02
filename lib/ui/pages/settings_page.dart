@@ -821,6 +821,48 @@ class _PlayerSettings extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (!settings.useMpvWindow) ...<Widget>[
+                  const SizedBox(height: 8),
+                  _FieldLabel(text: strings.inAppRenderer),
+                  DropdownButton<String>(
+                    isExpanded: true,
+                    value: const <String>['auto', 'gpu', 'cpu']
+                            .contains(settings.inAppRenderer)
+                        ? settings.inAppRenderer
+                        : 'auto',
+                    dropdownColor: colors.surface1,
+                    items: <DropdownMenuItem<String>>[
+                      DropdownMenuItem<String>(
+                        value: 'auto',
+                        child: Text(strings.rendererAuto),
+                      ),
+                      DropdownMenuItem<String>(
+                        value: 'gpu',
+                        child: Text(strings.rendererGpu),
+                      ),
+                      DropdownMenuItem<String>(
+                        value: 'cpu',
+                        child: Text(strings.rendererCpu),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        unawaited(
+                          state.updateSettings(
+                            settings.copyWith(inAppRenderer: value),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  Text(
+                    strings.inAppRendererHelp,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colors.subtext0,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
                 if (enabled && settings.useMpvWindow) ...<Widget>[
                   const SizedBox(height: 8),
                   _FieldLabel(text: strings.hardwareDecoding),

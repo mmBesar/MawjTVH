@@ -73,9 +73,11 @@ Note: something else, not a value.
       useUserConfig: true,
       fullscreen: false,
     );
-    expect(arguments, contains('--hwdec=auto-safe'));
+    // Defaults leave the person's own mpv configuration in charge.
+    expect(arguments.any((a) => a.startsWith('--hwdec=')), isFalse);
     expect(arguments, isNot(contains('--no-config')));
     expect(arguments.any((a) => a.startsWith('--vo=')), isFalse);
-    expect(arguments, contains('--tls-verify=yes'));
+    expect(arguments.any((a) => a.startsWith('--tls-verify')), isFalse);
+    expect(arguments.any((a) => a.startsWith('--cache')), isFalse);
   });
 }

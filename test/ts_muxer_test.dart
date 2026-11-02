@@ -54,7 +54,10 @@ void main() {
     final a = one();
     final b = one();
     expect(b[3] & 0x0f, (a[3] & 0x0f) + 1);
-    mux.configure(const <TsStream>[TsStream(index: 2, type: 'AAC')]);
+    mux.configure(const <TsStream>[
+      TsStream(index: 1, type: 'H264'),
+      TsStream(index: 2, type: 'AAC', language: 'ara'),
+    ]);
     final c = mux.packet(
       stream: 2,
       payload: Uint8List(100),

@@ -527,7 +527,7 @@ class _HeroCard extends StatelessWidget {
                 ),
                 const Spacer(),
                 BidiText(
-                  current?.title ?? strings.noProgrammeInfo,
+                  current?.displayTitle ?? strings.noProgrammeInfo,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleLarge?.copyWith(

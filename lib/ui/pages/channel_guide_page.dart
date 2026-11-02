@@ -249,7 +249,7 @@ class _ProgrammeCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 3),
                       BidiText(
-                        programme.title,
+                        programme.displayTitle,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleSmall?.copyWith(
