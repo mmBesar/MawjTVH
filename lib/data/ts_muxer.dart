@@ -7,6 +7,8 @@ class TsStream {
     required this.type,
     this.meta,
     this.language = '',
+    this.compositionId = 0,
+    this.ancillaryId = 0,
   });
 
   /// HTSP stream index, the key used by `muxpkt`.
@@ -18,6 +20,10 @@ class TsStream {
   /// Codec configuration blocks (avcC / hvcC) when the server sent them.
   final Uint8List? meta;
   final String language;
+
+  /// DVB subtitle page ids.
+  final int compositionId;
+  final int ancillaryId;
 }
 
 /// Rebuilds an MPEG transport stream from HTSP packets, so the player can
@@ -64,7 +70,18 @@ class TsMuxer {
         language: stream.language,
         headers: isVideo ? _parameterSets(stream) : null,
         nalLength: isVideo ? _nalLengthSize(stream) : 0,
-        privateDescriptor: info.descriptor,
+        privateDescriptor: info.subtitle
+            ? <int>[
+                0x59,
+                8,
+                ..._lang3(stream.language),
+                0x10,
+                (stream.compositionId >> 8) & 0xff,
+                stream.compositionId & 0xff,
+                (stream.ancillaryId >> 8) & 0xff,
+                stream.ancillaryId & 0xff,
+              ]
+            : const <int>[],
       );
     }
     final firstVideo = _tracks.values.where((t) => t.video).firstOrNull;
@@ -365,7 +382,7 @@ class TsMuxer {
     for (final track in _tracks.values) {
       final descriptors = <int>[
         ...track.privateDescriptor,
-        if (track.language.length >= 3 && !track.video)
+        if (track.language.length >= 3 && !track.video && track.privateDescriptor.isEmpty)
           ...<int>[0x0A, 4, ...track.language.codeUnits.take(3), 0],
       ];
       body.addAll(<int>[
@@ -418,6 +435,11 @@ class TsMuxer {
     return crc;
   }
 
+  static List<int> _lang3(String language) {
+    final padded = language.length >= 3 ? language : 'und';
+    return padded.substring(0, 3).codeUnits;
+  }
+
   static _Codec? _codec(String type) {
     switch (type) {
       case 'MPEG2VIDEO':
@@ -434,6 +456,8 @@ class TsMuxer {
         return const _Codec(0x81, privateStream: true);
       case 'EAC3':
         return const _Codec(0x87, privateStream: true);
+      case 'DVBSUB':
+        return const _Codec(0x06, privateStream: true, subtitle: true);
       default:
         return null;
     }
@@ -445,13 +469,13 @@ class _Codec {
     this.streamType, {
     this.video = false,
     this.privateStream = false,
+    this.subtitle = false,
   });
 
   final int streamType;
   final bool video;
   final bool privateStream;
-
-  List<int> get descriptor => const <int>[];
+  final bool subtitle;
 }
 
 class _Track {

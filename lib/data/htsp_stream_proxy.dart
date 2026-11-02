@@ -230,6 +230,12 @@ class _Feed {
                       type: type,
                       meta: meta is Uint8List ? meta : null,
                       language: language is String ? language : '',
+                      compositionId: item['composition_id'] is int
+                          ? item['composition_id'] as int
+                          : 0,
+                      ancillaryId: item['ancillary_id'] is int
+                          ? item['ancillary_id'] as int
+                          : 0,
                     ),
                   );
                 }

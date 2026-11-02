@@ -8,6 +8,7 @@
 - Guide shows episode numbers; HTSP guide carries more detail (credits, rating, year, HD).
 - New default look "Studio" (pine-black, broadcast green) and "Daylight"; Mawj and the others stay as options.
 - Desktop plays in the app by default (the separate mpv window stays an option).
+- Audio & subtitles picker with real language names; DVB subtitles are carried through the HTSP stream.
 - Favourite star moved to the bottom row on Android so nothing covers it.
 
 ## 0.1.1

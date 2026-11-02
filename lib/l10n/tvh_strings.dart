@@ -106,6 +106,15 @@ extension TvhStrings on AppStrings {
   String get version => isArabic ? 'الإصدار' : 'Version';
 
   // Local recording
+  String get audioTracks => isArabic ? 'المسارات الصوتية' : 'Audio';
+  String get subtitleTracks => isArabic ? 'الترجمة' : 'Subtitles';
+  String get subtitlesOff => isArabic ? 'بدون ترجمة' : 'Off';
+  String get noTracks => isArabic ? 'لا توجد مسارات في هذا البث.' : 'This stream has none.';
+  String trackNumber(int n) => isArabic ? 'مسار $n' : 'Track $n';
+  String get audioAndSubtitles => isArabic ? 'الصوت والترجمة' : 'Audio & subtitles';
+  String get tracksHelp => isArabic
+      ? 'تظهر الأسماء من لغة المسار في البث. ترجمة DVB تُعرض بينما ترجمة التلتكست غير مدعومة بعد.'
+      : 'Names come from the language each track declares. DVB subtitles are shown; teletext subtitles are not supported yet.';
   String get allKinds => isArabic ? 'الكل' : 'All';
   String get tvKind => isArabic ? 'تلفزيون' : 'TV';
   String get radioKind => isArabic ? 'راديو' : 'Radio';

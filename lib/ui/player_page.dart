@@ -25,6 +25,7 @@ import 'desktop_player_page.dart';
 import 'widgets/channel_logo.dart';
 import 'widgets/record_now_button.dart';
 import 'widgets/signal_badge.dart';
+import 'widgets/track_sheet.dart';
 import 'widgets/wave.dart';
 
 /// Opens the player for [channel] with a short fade.
@@ -1155,6 +1156,13 @@ class _PlayerPageState extends State<PlayerPage> {
                               ],
                             ),
                           ],
+                        ),
+                      ),
+                      _RoundButton(
+                        tooltip: strings.audioAndSubtitles,
+                        icon: Icons.subtitles_rounded,
+                        onPressed: () => unawaited(
+                          showTrackSheet(context, _player),
                         ),
                       ),
                       _RoundButton(

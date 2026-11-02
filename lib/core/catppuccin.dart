@@ -200,18 +200,37 @@ const Map<ThemeAccent, Color> _foamAccents = {
 
 /// Studio accents: MawjTVH's own signature is a vivid broadcast green.
 const Map<ThemeAccent, Color> _studioAccents = {
-  ..._mawjAccents,
+  ThemeAccent.rosewater: Color(0xFFF5E0DC),
+  ThemeAccent.flamingo: Color(0xFFF2CDCD),
+  ThemeAccent.pink: Color(0xFFF5C2E7),
+  ThemeAccent.mauve: Color(0xFFCBA6F7),
+  ThemeAccent.red: Color(0xFFFF6B6B),
+  ThemeAccent.maroon: Color(0xFFEBA0AC),
+  ThemeAccent.peach: Color(0xFFFF9F5A),
+  ThemeAccent.yellow: Color(0xFFFFC857),
   ThemeAccent.green: Color(0xFF3DDC97),
   ThemeAccent.teal: Color(0xFF2BD4C0),
-  ThemeAccent.yellow: Color(0xFFFFC857),
-  ThemeAccent.peach: Color(0xFFFF9F5A),
-  ThemeAccent.red: Color(0xFFFF6B6B),
+  ThemeAccent.sky: Color(0xFF7DD3FC),
+  ThemeAccent.sapphire: Color(0xFF5AB0FF),
+  ThemeAccent.blue: Color(0xFF7C9CFF),
+  ThemeAccent.lavender: Color(0xFFB4BEFE),
 };
 
 const Map<ThemeAccent, Color> _daylightAccents = {
-  ..._foamAccents,
+  ThemeAccent.rosewater: Color(0xFFC96F5F),
+  ThemeAccent.flamingo: Color(0xFFC85A5A),
+  ThemeAccent.pink: Color(0xFFD1409F),
+  ThemeAccent.mauve: Color(0xFF7B2FE0),
+  ThemeAccent.red: Color(0xFFD1213F),
+  ThemeAccent.maroon: Color(0xFFC63A47),
+  ThemeAccent.peach: Color(0xFFE5560B),
+  ThemeAccent.yellow: Color(0xFFB87400),
   ThemeAccent.green: Color(0xFF0E9F6E),
   ThemeAccent.teal: Color(0xFF0B8F86),
+  ThemeAccent.sky: Color(0xFF0388C4),
+  ThemeAccent.sapphire: Color(0xFF16899E),
+  ThemeAccent.blue: Color(0xFF1B57E0),
+  ThemeAccent.lavender: Color(0xFF5E73E6),
 };
 
 /// Pine-black with a broadcast-green accent: the default look.
