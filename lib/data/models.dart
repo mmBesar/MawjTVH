@@ -311,11 +311,12 @@ class AppSettings {
     this.richVisuals = true,
     this.reduceMotion = false,
     this.inAppRenderer = 'auto',
+    this.lastGroup = '',
   });
 
   factory AppSettings.defaults() => const AppSettings(
         themeFamily: ThemeFamily.studio,
-        accent: ThemeAccent.green,
+        accent: ThemeAccent.peach,
         language: AppLanguage.system,
         use24HourTime: false,
       );
@@ -364,6 +365,9 @@ class AppSettings {
   /// Linux in-app video: `auto`, `gpu` or `cpu`.
   final String inAppRenderer;
 
+  /// The channel group (tag) last chosen on Watch or Guide; empty means all.
+  final String lastGroup;
+
   AppSettings copyWith({
     ThemeFamily? themeFamily,
     ThemeAccent? accent,
@@ -382,6 +386,7 @@ class AppSettings {
     bool? richVisuals,
     bool? reduceMotion,
     String? inAppRenderer,
+    String? lastGroup,
   }) {
     return AppSettings(
       themeFamily: themeFamily ?? this.themeFamily,
@@ -403,6 +408,7 @@ class AppSettings {
       richVisuals: richVisuals ?? this.richVisuals,
       reduceMotion: reduceMotion ?? this.reduceMotion,
       inAppRenderer: inAppRenderer ?? this.inAppRenderer,
+      lastGroup: lastGroup ?? this.lastGroup,
     );
   }
 
@@ -424,6 +430,7 @@ class AppSettings {
         'richVisuals': richVisuals,
         'reduceMotion': reduceMotion,
         'inAppRenderer': inAppRenderer,
+        'lastGroup': lastGroup,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -436,7 +443,7 @@ class AppSettings {
       accent: _enumByName(
         ThemeAccent.values,
         json['accent'] as String?,
-        ThemeAccent.green,
+        ThemeAccent.peach,
       ),
       language: _enumByName(
         AppLanguage.values,
@@ -457,6 +464,7 @@ class AppSettings {
       richVisuals: json['richVisuals'] as bool? ?? true,
       reduceMotion: json['reduceMotion'] as bool? ?? false,
       inAppRenderer: json['inAppRenderer'] as String? ?? 'auto',
+      lastGroup: json['lastGroup'] as String? ?? '',
     );
   }
 }

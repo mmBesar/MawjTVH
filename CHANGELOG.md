@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3
+
+- Tuner is released the moment you close a channel or zap away (it used to stay locked until the app was closed); a second subscription can no longer be opened by the signal badge or by a quick close and reopen.
+- Busy tuner, weak signal, encrypted channel and similar server refusals are shown in the player instead of an endless spinner.
+- Desktop player: mouse wheel changes volume, arrow keys and +/- too, `I` toggles a stream info panel (now/next, resolution, codecs, decoder), `D` shows diagnostics; volume OSD.
+- New look from the Tvheadend logo colours: deep blue base with orange accent (Studio), a light blue Daylight; icon recoloured to match.
+- The last used group is remembered across restarts.
+
 ## 0.1.2
 
 - One HTSP subscription per channel, shared by the player and local recording.

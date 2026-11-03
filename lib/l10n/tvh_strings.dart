@@ -106,6 +106,52 @@ extension TvhStrings on AppStrings {
   String get version => isArabic ? 'الإصدار' : 'Version';
 
   // Local recording
+  /// A readable reason for the server's stream error [text]
+  /// (`No free adapter`, `Too weak signal`...).
+  String streamIssue(String text) {
+    final code = text.toLowerCase().replaceAll(RegExp('[^a-z]'), '');
+    bool has(String part) => code.contains(part);
+    if (has('freeadapter') || has('noadapter') || has('busy')) {
+      return isArabic
+          ? 'كل الموالفات مشغولة. أوقف بثًا أو تسجيلًا آخر ثم جرّب.'
+          : 'All tuners are busy. Stop another stream or recording and try again.';
+    }
+    if (has('weak') || has('badsignal')) {
+      return isArabic ? 'الإشارة ضعيفة جدًا.' : 'The signal is too weak.';
+    }
+    if (has('descrambl') || has('scrambl')) {
+      return isArabic
+          ? 'القناة مشفّرة ولا يمكن فكها على هذا الخادم.'
+          : 'This channel is encrypted and cannot be decoded.';
+    }
+    if (has('override')) {
+      return isArabic
+          ? 'استولى مشاهد بأولوية أعلى على الموالف.'
+          : 'A viewer with higher priority took the tuner.';
+    }
+    if (has('noaccess') || has('access')) {
+      return isArabic
+          ? 'هذا الحساب غير مسموح له بمشاهدة هذه القناة.'
+          : 'This account may not watch this channel.';
+    }
+    if (has('tuningfailed') || has('noinput')) {
+      return isArabic
+          ? 'تعذّر على الموالف تثبيت هذه القناة.'
+          : 'The tuner could not lock this channel.';
+    }
+    if (has('limit') || has('toomany')) {
+      return isArabic
+          ? 'بلغ الحساب حدّ الاتصالات المسموح.'
+          : 'This account reached its connection limit.';
+    }
+    return text;
+  }
+
+  String get infoVideo => isArabic ? 'الفيديو' : 'Video';
+  String get infoAudio => isArabic ? 'الصوت' : 'Audio';
+  String get infoDecoder => isArabic ? 'فك الترميز' : 'Decoder';
+  String get infoDropped => isArabic ? 'إطارات مفقودة' : 'Dropped';
+  String get streamInfo => isArabic ? 'معلومات البث' : 'Stream info';
   String get inAppRenderer => isArabic ? 'عرض الفيديو داخل التطبيق' : 'In-app video rendering';
   String get rendererAuto => isArabic ? 'تلقائي (GPU)' : 'Automatic (GPU)';
   String get rendererGpu => isArabic ? 'GPU (الأسلس)' : 'GPU (smoothest)';

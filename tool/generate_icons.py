@@ -15,10 +15,10 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parent.parent
 BRANDING = ROOT / "assets" / "branding"
 
-ABYSS = (3, 22, 30)
-SWELL = (10, 96, 104)
-FOAM = (240, 250, 250)
-CREST = (255, 196, 64)
+ABYSS = (8, 22, 50)
+SWELL = (31, 94, 170)
+FOAM = (242, 247, 253)
+CREST = (242, 140, 40)
 SIGNAL_CX, SIGNAL_CY = 512, 800
 
 SIZE = 1024  # design grid

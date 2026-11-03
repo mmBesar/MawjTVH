@@ -198,7 +198,7 @@ const Map<ThemeAccent, Color> _foamAccents = {
   ThemeAccent.lavender: Color(0xFF5E73E6),
 };
 
-/// Studio accents: MawjTVH's own signature is a vivid broadcast green.
+/// Studio accents: Tvheadend blue with an orange accent.
 const Map<ThemeAccent, Color> _studioAccents = {
   ThemeAccent.rosewater: Color(0xFFF5E0DC),
   ThemeAccent.flamingo: Color(0xFFF2CDCD),
@@ -206,10 +206,10 @@ const Map<ThemeAccent, Color> _studioAccents = {
   ThemeAccent.mauve: Color(0xFFCBA6F7),
   ThemeAccent.red: Color(0xFFFF6B6B),
   ThemeAccent.maroon: Color(0xFFEBA0AC),
-  ThemeAccent.peach: Color(0xFFFF9F5A),
-  ThemeAccent.yellow: Color(0xFFFFC857),
-  ThemeAccent.green: Color(0xFF2F9E6E),
-  ThemeAccent.teal: Color(0xFF2A9D8F),
+  ThemeAccent.peach: Color(0xFFF28C28),
+  ThemeAccent.yellow: Color(0xFFFFB84D),
+  ThemeAccent.green: Color(0xFF5FB07F),
+  ThemeAccent.teal: Color(0xFF4FB3B3),
   ThemeAccent.sky: Color(0xFF7DD3FC),
   ThemeAccent.sapphire: Color(0xFF5AB0FF),
   ThemeAccent.blue: Color(0xFF7C9CFF),
@@ -223,47 +223,47 @@ const Map<ThemeAccent, Color> _daylightAccents = {
   ThemeAccent.mauve: Color(0xFF7B2FE0),
   ThemeAccent.red: Color(0xFFD1213F),
   ThemeAccent.maroon: Color(0xFFC63A47),
-  ThemeAccent.peach: Color(0xFFE5560B),
+  ThemeAccent.peach: Color(0xFFD9670B),
   ThemeAccent.yellow: Color(0xFFB87400),
-  ThemeAccent.green: Color(0xFF0B7A55),
-  ThemeAccent.teal: Color(0xFF0A6F68),
+  ThemeAccent.green: Color(0xFF2E8B57),
+  ThemeAccent.teal: Color(0xFF0F7C86),
   ThemeAccent.sky: Color(0xFF0388C4),
   ThemeAccent.sapphire: Color(0xFF16899E),
   ThemeAccent.blue: Color(0xFF1B57E0),
   ThemeAccent.lavender: Color(0xFF5E73E6),
 };
 
-/// Pine-black with a broadcast-green accent: the default look.
+/// Deep Tvheadend blue with an orange accent: the default look.
 const CatppuccinPalette studioPalette = CatppuccinPalette(
-  base: Color(0xFF0A100F),
-  mantle: Color(0xFF070C0B),
-  crust: Color(0xFF040706),
-  text: Color(0xFFEAF5F0),
-  subtext1: Color(0xFFC3D6CE),
-  subtext0: Color(0xFF98B0A6),
-  overlay2: Color(0xFF7E968C),
-  overlay1: Color(0xFF668077),
-  overlay0: Color(0xFF506760),
-  surface2: Color(0xFF2A3F38),
-  surface1: Color(0xFF1D2E29),
-  surface0: Color(0xFF132019),
+  base: Color(0xFF0B1526),
+  mantle: Color(0xFF08101E),
+  crust: Color(0xFF050B15),
+  text: Color(0xFFEEF3FB),
+  subtext1: Color(0xFFC2CEE3),
+  subtext0: Color(0xFF93A5C6),
+  overlay2: Color(0xFF7889AD),
+  overlay1: Color(0xFF5F7096),
+  overlay0: Color(0xFF4A5A7E),
+  surface2: Color(0xFF263A5E),
+  surface1: Color(0xFF1B2C4A),
+  surface0: Color(0xFF132038),
   accents: _studioAccents,
 );
 
-/// Warm paper light look to go with Studio.
+/// Light blue-white look to go with Studio.
 const CatppuccinPalette daylightPalette = CatppuccinPalette(
-  base: Color(0xFFFBF8F2),
-  mantle: Color(0xFFF3EEE4),
-  crust: Color(0xFFE8E1D3),
-  text: Color(0xFF1B2B26),
-  subtext1: Color(0xFF33463F),
-  subtext0: Color(0xFF55685F),
-  overlay2: Color(0xFF73867D),
-  overlay1: Color(0xFF90A198),
-  overlay0: Color(0xFFA9B8B0),
-  surface2: Color(0xFFCFD8CF),
-  surface1: Color(0xFFDFE5DC),
-  surface0: Color(0xFFEBEEE6),
+  base: Color(0xFFF6F8FC),
+  mantle: Color(0xFFEDF1F8),
+  crust: Color(0xFFE1E7F2),
+  text: Color(0xFF0F1B33),
+  subtext1: Color(0xFF2A3956),
+  subtext0: Color(0xFF4C5C7D),
+  overlay2: Color(0xFF6A7A9C),
+  overlay1: Color(0xFF8695B4),
+  overlay0: Color(0xFFA0AEC8),
+  surface2: Color(0xFFC5D0E4),
+  surface1: Color(0xFFD7DFEE),
+  surface0: Color(0xFFE6ECF6),
   accents: _daylightAccents,
 );
 

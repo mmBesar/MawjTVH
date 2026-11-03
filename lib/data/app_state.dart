@@ -58,6 +58,7 @@ class AppState extends ChangeNotifier {
   Map<String, Channel> _channelById = const <String, Channel>{};
   List<String> _groups = const <String>[];
   String? _groupFilter;
+  bool _groupRestored = false;
 
   AppSettings get settings => _settings;
   List<SourceConfig> get sources => List<SourceConfig>.unmodifiable(_sources);
@@ -89,14 +90,30 @@ class AppState extends ChangeNotifier {
 
   /// The channel group (Tvheadend tag) chosen on Watch or Guide, shared by
   /// both so they always show the same slice. Null means every channel.
-  String? get groupFilter => _groups.contains(_groupFilter) ? _groupFilter : null;
+  String? get groupFilter {
+    if (!_groupRestored && _groups.isNotEmpty) {
+      // Back to the group used last time, once the groups are known.
+      _groupRestored = true;
+      final saved = _settings.lastGroup;
+      if (saved.isNotEmpty && _groups.contains(saved)) {
+        _groupFilter = saved;
+      }
+    }
+    return _groups.contains(_groupFilter) ? _groupFilter : null;
+  }
 
   void setGroupFilter(String? group) {
+    _groupRestored = true;
     if (_groupFilter == group) {
       return;
     }
     _groupFilter = group;
     notifyListeners();
+    final saved = group ?? '';
+    if (_settings.lastGroup != saved) {
+      _settings = _settings.copyWith(lastGroup: saved);
+      unawaited(_storage.saveSettings(_settings));
+    }
   }
 
   MediaFilter _media = MediaFilter.all;
@@ -267,6 +284,18 @@ class AppState extends ChangeNotifier {
 
   HtspBackend? get _htsp => _htspSession;
 
+  final Map<String, String> _streamIssues = <String, String>{};
+
+  /// Why the server cannot deliver [channel] right now (tuner busy, weak
+  /// signal...), or null when nothing is wrong.
+  String? streamIssueFor(Channel channel) => _streamIssues[channel.id];
+
+  /// Frees the tuner when the player leaves [channel].
+  void releaseStream(Channel channel) {
+    _htspSession?.releaseStream(channel.id);
+    _streamIssues.remove(channel.id);
+  }
+
   /// True while the native HTSP session is connected.
   bool get usesHtsp => _htspSession != null && !_htspSession!.isClosed;
 
@@ -276,6 +305,18 @@ class AppState extends ChangeNotifier {
       return;
     }
     _htspFailures = 0;
+    backend.streamStatusListener = (channelId, issue) {
+      if (issue == null) {
+        if (_streamIssues.remove(channelId) == null) {
+          return;
+        }
+      } else if (_streamIssues[channelId] == issue) {
+        return;
+      } else {
+        _streamIssues[channelId] = issue;
+      }
+      notifyListeners();
+    };
     _htspChanges = backend.changes.listen((_) => _applyHtspChange(backend));
     unawaited(
       backend.closed.then((_) {

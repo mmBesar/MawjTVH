@@ -28,6 +28,9 @@ class HtspBackend {
   Timer? _debounce;
   Timer? _horizon;
   HtspStreamProxy? _proxy;
+
+  /// Set by the owner to hear why a channel cannot be delivered.
+  void Function(String channelId, String? issue)? streamStatusListener;
   final Map<String, ({TvhSignal signal, DateTime at})> _liveSignal =
       <String, ({TvhSignal signal, DateTime at})>{};
   int _guideHours = 12;
@@ -65,6 +68,8 @@ class HtspBackend {
         onSignal: (channelId, signal) {
           backend._liveSignal[channelId] = (signal: signal, at: DateTime.now());
         },
+        onStatus: (channelId, issue) =>
+            backend.streamStatusListener?.call(channelId, issue),
       );
       try {
         await proxy.start();
@@ -402,6 +407,15 @@ class HtspBackend {
   String recordingUrl(String dvrId) =>
       _address.dvrUrl(dvrId, user: _user, pass: _pass);
 
+  /// Frees the tuner of [channelId] as soon as the player leaves it.
+  void releaseStream(String channelId) {
+    final id = int.tryParse(channelId);
+    if (id != null) {
+      _proxy?.release(id);
+    }
+    unawaited(_stopSignal());
+  }
+
   // ---- signal --------------------------------------------------------------
 
   static const int _signalSubscription = 7001;
@@ -427,9 +441,9 @@ class HtspBackend {
       // The stream proxy is already receiving this channel's signal.
       return live.signal;
     }
-    if (_proxy?.isActive(channel) ?? false) {
-      // The stream itself carries the signal; never open a second
-      // subscription for it.
+    if (_proxy != null) {
+      // In HTSP stream mode the stream itself carries the signal. A second
+      // subscription would hold another tuner slot, so never open one.
       return live?.signal;
     }
     _signalIdle?.cancel();

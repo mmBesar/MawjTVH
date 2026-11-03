@@ -18,6 +18,7 @@ class HtspStreamProxy {
     this._connection, {
     this.profile = '',
     this.onSignal,
+    this.onStatus,
   });
 
   final HtspConnection _connection;
@@ -26,6 +27,10 @@ class HtspStreamProxy {
   /// Called with each `signalStatus` of a watched channel, so the signal
   /// badge needs no subscription of its own.
   final void Function(String channelId, TvhSignal signal)? onSignal;
+
+  /// Called with the server's reason when a channel cannot be delivered
+  /// (`noFreeAdapter`, `badSignal`...), and with null once media flows.
+  final void Function(String channelId, String? issue)? onStatus;
 
   HttpServer? _server;
   int _nextSubscription = 100;
@@ -39,6 +44,9 @@ class HtspStreamProxy {
   }
 
   bool get isRunning => _server != null;
+
+  /// Ends the subscription for [channelId] now and frees its tuner.
+  void release(int channelId) => _feeds[channelId]?.stop();
 
   /// True while a player is watching [channelId] through this proxy.
   bool isActive(int channelId) => _feeds.containsKey(channelId);
@@ -142,7 +150,13 @@ class _Feed {
     if (current != null && !current.isCompleted) {
       current.complete();
     }
-    proxy._feeds.remove(channel);
+    if (identical(proxy._feeds[channel], this)) {
+      proxy._feeds.remove(channel);
+    }
+    for (final client in _clients.toList()) {
+      client.close().catchError((Object _) {});
+    }
+    _clients.clear();
   }
 
   Future<void> run() async {
@@ -292,6 +306,9 @@ class _Feed {
           );
           if (bytes != null) {
             _write(bytes);
+            if (!delivered) {
+              proxy.onStatus?.call('$channel', null);
+            }
             delivered = true;
             arm(const Duration(seconds: 8));
           }
@@ -308,7 +325,16 @@ class _Feed {
               unc: message['feUNC'] is int ? message['feUNC'] as int : null,
             ),
           );
+        case 'subscriptionStatus':
+          final issue = _issue(message);
+          if (issue != null) {
+            proxy.onStatus?.call('$channel', issue);
+          }
         case 'subscriptionStop':
+          final reason = _issue(message);
+          if (reason != null) {
+            proxy.onStatus?.call('$channel', reason);
+          }
           finish();
       }
     });
@@ -354,4 +380,17 @@ double? _scale(Object? value) {
     return (number / 65535.0 * 100.0).clamp(0.0, 100.0).toDouble();
   }
   return number.clamp(0.0, 100.0).toDouble();
+}
+
+/// The server's reason for a stalled or stopped subscription, if it gave one.
+String? _issue(Map<String, Object?> message) {
+  final error = message['subscriptionError'];
+  if (error is String && error.isNotEmpty) {
+    return error;
+  }
+  final status = message['status'];
+  if (status is String && status.isNotEmpty) {
+    return status;
+  }
+  return null;
 }

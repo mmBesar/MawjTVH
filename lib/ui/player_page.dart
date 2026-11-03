@@ -172,13 +172,18 @@ class _PlayerPageState extends State<PlayerPage> {
   double _volume = 100;
   bool _adjustingBrightness = true;
   _OsdKind? _osdKind;
+  late AppState _appState;
+  bool _infoVisible = false;
+  Timer? _infoTimer;
+  Map<String, String> _infoProps = const <String, String>{};
   double _osdValue = 0;
 
   @override
   void initState() {
     super.initState();
     _channel = widget.channel;
-    _gpu = _gpuRenderer(context.read<AppState>().settings.inAppRenderer);
+    _appState = context.read<AppState>();
+    _gpu = _gpuRenderer(_appState.settings.inAppRenderer);
     _player = Player(
       configuration: PlayerConfiguration(
         title: 'MawjTVH — ${_channel.name}',
@@ -438,9 +443,12 @@ class _PlayerPageState extends State<PlayerPage> {
     if (channel.id == _channel.id) {
       return;
     }
+    final previous = _channel;
     setState(() => _channel = channel);
     _showControls();
-    unawaited(_open());
+    // Free the tuner of the channel being left once the new one has taken
+    // over the player, so the old stream is not cut under it.
+    unawaited(_open().whenComplete(() => _appState.releaseStream(previous)));
   }
 
   // ---- Controls visibility -----------------------------------------------
@@ -642,6 +650,65 @@ class _PlayerPageState extends State<PlayerPage> {
     });
   }
 
+  void _adjustVolume(double delta) {
+    final next = (_volume + delta).clamp(0.0, 100.0).toDouble();
+    setState(() => _volume = next);
+    unawaited(_player.setVolume(next));
+    _showOsd(_OsdKind.volume, next / 100);
+  }
+
+  void _onScroll(PointerSignalEvent event) {
+    if (event is PointerScrollEvent && event.scrollDelta.dy != 0) {
+      _adjustVolume(event.scrollDelta.dy < 0 ? 5 : -5);
+    }
+  }
+
+  // ---- Stream info (I) ----------------------------------------------------
+
+  void _toggleInfo() {
+    setState(() => _infoVisible = !_infoVisible);
+    _infoTimer?.cancel();
+    if (_infoVisible) {
+      unawaited(_refreshInfo());
+      _infoTimer = Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => unawaited(_refreshInfo()),
+      );
+    }
+  }
+
+  Future<void> _refreshInfo() async {
+    final platform = _player.platform;
+    if (platform is! NativePlayer) {
+      return;
+    }
+    const names = <String>[
+      'video-codec',
+      'audio-codec-name',
+      'hwdec-current',
+      'estimated-vf-fps',
+      'video-bitrate',
+      'audio-bitrate',
+      'audio-params/samplerate',
+      'audio-params/hr-channels',
+      'frame-drop-count',
+    ];
+    final values = <String, String>{};
+    for (final name in names) {
+      try {
+        final value = await platform.getProperty(name);
+        if (value.isNotEmpty) {
+          values[name] = value;
+        }
+      } catch (_) {
+        // Not available in this libmpv build.
+      }
+    }
+    if (mounted && _infoVisible) {
+      setState(() => _infoProps = values);
+    }
+  }
+
   void _toggleMute() {
     unawaited(_player.setVolume(_volume <= 0.01 ? 100 : 0));
     _showControls();
@@ -790,6 +857,7 @@ class _PlayerPageState extends State<PlayerPage> {
     _hideTimer?.cancel();
     _osdTimer?.cancel();
     _errorTimer?.cancel();
+    _infoTimer?.cancel();
     final recorder = _recorder;
     _recorder = null;
     if (recorder != null) {
@@ -816,7 +884,14 @@ class _PlayerPageState extends State<PlayerPage> {
         debugPrint('Could not disable the wakelock: $error');
       }),
     );
-    unawaited(_player.dispose());
+    // Give the tuner back as soon as the player is gone, and once more after
+    // the player has really closed its connection.
+    final leaving = _channel;
+    final appState = _appState;
+    appState.releaseStream(leaving);
+    unawaited(
+      _player.dispose().whenComplete(() => appState.releaseStream(leaving)),
+    );
     if (_isDesktop) {
       if (_fullscreen) {
         unawaited(_setNativeFullscreen(false));
@@ -862,9 +937,22 @@ class _PlayerPageState extends State<PlayerPage> {
           const SingleActivator(LogicalKeyboardKey.pageUp): () => _zap(-1),
           const SingleActivator(LogicalKeyboardKey.arrowDown): () => _zap(1),
           const SingleActivator(LogicalKeyboardKey.pageDown): () => _zap(1),
-          const SingleActivator(LogicalKeyboardKey.keyI): () {
+          const SingleActivator(LogicalKeyboardKey.keyI): _toggleInfo,
+          const SingleActivator(LogicalKeyboardKey.keyD): () {
             unawaited(_showDiagnostics());
           },
+          const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+              _adjustVolume(5),
+          const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+              _adjustVolume(-5),
+          const SingleActivator(LogicalKeyboardKey.equal): () =>
+              _adjustVolume(5),
+          const SingleActivator(LogicalKeyboardKey.numpadAdd): () =>
+              _adjustVolume(5),
+          const SingleActivator(LogicalKeyboardKey.minus): () =>
+              _adjustVolume(-5),
+          const SingleActivator(LogicalKeyboardKey.numpadSubtract): () =>
+              _adjustVolume(-5),
         },
         child: Focus(
           autofocus: true,
@@ -918,6 +1006,155 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
+  Widget _infoHud(AppState state) {
+    final strings = context.strings;
+    final colors = context.mawjColors;
+    final use24 = state.settings.use24HourTime;
+    final now = state.epg.nowFor(_channel, state.now);
+    final next = state.epg.nextFor(_channel, state.now);
+    final params = _videoParams;
+    final width = params?.w ?? 0;
+    final height = params?.h ?? 0;
+    final props = _infoProps;
+
+    String range(Programme programme) =>
+        '${strings.formatTime(programme.start, use24HourTime: use24)} – '
+        '${strings.formatTime(programme.stop, use24HourTime: use24)}';
+
+    Widget row(String label, String value) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 3),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            SizedBox(
+              width: 74,
+              child: Text(
+                label,
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ),
+            Flexible(
+              child: Text(
+                value,
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final video = <String>[
+      if (width > 0 && height > 0) '$width×$height',
+      if (props['video-codec'] != null)
+        props['video-codec']!.split(' ').first.toUpperCase(),
+      if (props['estimated-vf-fps'] != null)
+        '${double.tryParse(props['estimated-vf-fps']!)?.toStringAsFixed(0) ?? ''} fps',
+    ].where((part) => part.trim().isNotEmpty).join(' · ');
+    final audio = <String>[
+      if (props['audio-codec-name'] != null)
+        props['audio-codec-name']!.toUpperCase(),
+      if (props['audio-params/hr-channels'] != null)
+        props['audio-params/hr-channels']!,
+      if (props['audio-params/samplerate'] != null)
+        '${props['audio-params/samplerate']} Hz',
+    ].join(' · ');
+    final decoder = props['hwdec-current'];
+
+    return Align(
+      alignment: AlignmentDirectional.topStart,
+      child: Padding(
+        padding: const EdgeInsetsDirectional.fromSTEB(20, 76, 20, 0),
+        child: IgnorePointer(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 420),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(14),
+              border: Border(
+                left: BorderSide(color: colors.accent, width: 3),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  '${_channel.displayNumber}  ${_channel.name}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (now != null) ...<Widget>[
+                  const SizedBox(height: 8),
+                  Text(
+                    '${strings.now} · ${range(now)}',
+                    style: TextStyle(
+                      color: colors.accent,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    now.displayTitle,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if ((now.description ?? '').isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        now.description!,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                ],
+                if (next != null) ...<Widget>[
+                  const SizedBox(height: 8),
+                  Text(
+                    '${strings.next} · ${range(next)}',
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    next.displayTitle,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Container(height: 1, color: Colors.white12),
+                const SizedBox(height: 6),
+                if (video.isNotEmpty) row(strings.infoVideo, video),
+                if (audio.isNotEmpty) row(strings.infoAudio, audio),
+                if (decoder != null && decoder != 'no')
+                  row(strings.infoDecoder, decoder),
+                if (props['frame-drop-count'] != null &&
+                    props['frame-drop-count'] != '0')
+                  row(strings.infoDropped, props['frame-drop-count']!),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _videoLayer(AppState state, {required bool immersive}) {
     final strings = context.strings;
     final colors = context.mawjColors;
@@ -931,7 +1168,9 @@ class _PlayerPageState extends State<PlayerPage> {
           Size(constraints.maxWidth, constraints.maxHeight),
           MediaQuery.devicePixelRatioOf(context),
         );
-        return MouseRegion(
+        return Listener(
+          onPointerSignal: _isDesktop ? _onScroll : null,
+          child: MouseRegion(
           onHover: (_) => _showControls(),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -981,12 +1220,25 @@ class _PlayerPageState extends State<PlayerPage> {
                         ),
                         if (!_hasVideo) ...<Widget>[
                           const SizedBox(height: 10),
-                          Text(
-                            strings.tuning,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          Builder(
+                            builder: (context) {
+                              final issue = state.streamIssueFor(_channel);
+                              return ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 340),
+                                child: Text(
+                                  issue == null
+                                      ? strings.tuning
+                                      : strings.streamIssue(issue),
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: issue == null
+                                        ? Colors.white70
+                                        : colors.accent,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ],
@@ -994,6 +1246,7 @@ class _PlayerPageState extends State<PlayerPage> {
                   ),
                 if (problem) _buildProblem(strings),
                 _buildControls(state, immersive: immersive, constraints: constraints),
+                if (_infoVisible) _infoHud(state),
                 if (_osdKind != null)
                   IgnorePointer(
                     child: _GestureOsd(
@@ -1004,6 +1257,7 @@ class _PlayerPageState extends State<PlayerPage> {
                   ),
               ],
             ),
+          ),
           ),
         );
       },

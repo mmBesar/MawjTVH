@@ -43,6 +43,7 @@ class NowPlayingPage extends StatefulWidget {
 
 class _NowPlayingPageState extends State<NowPlayingPage> {
   late Channel _channel;
+  late AppState _appState;
   MpvSession? _session;
   AppLifecycleListener? _lifecycle;
   Timer? _decoderTimer;
@@ -58,6 +59,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   void initState() {
     super.initState();
     _channel = widget.channel;
+    _appState = context.read<AppState>();
     _lifecycle = AppLifecycleListener(
       onExitRequested: () async {
         _session?.kill();
@@ -220,13 +222,14 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     if (!mounted) {
       return;
     }
+    final previous = _channel;
     setState(() {
       _channel = channel;
       _decoder = null;
     });
     final session = _session;
     if (session != null && _phase == _Phase.playing) {
-      unawaited(context.read<AppState>().markWatched(channel));
+      unawaited(_appState.markWatched(channel));
       await session.load(channel.url, 'MawjTVH · ${channel.name}');
       if (mounted) {
         _scheduleDecoderProbe(session, _generation);
@@ -234,6 +237,8 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     } else {
       await _start();
     }
+    // The old channel's tuner is only needed until the new one has loaded.
+    _appState.releaseStream(previous);
   }
 
   Future<void> _stop() async {
@@ -279,6 +284,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     _generation++;
     _decoderTimer?.cancel();
     _lifecycle?.dispose();
+    _appState.releaseStream(_channel);
     final recorder = _recorder;
     _recorder = null;
     if (recorder != null) {
