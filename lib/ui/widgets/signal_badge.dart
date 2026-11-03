@@ -19,6 +19,7 @@ class SignalBadge extends StatefulWidget {
     required this.channel,
     this.dark = true,
     this.interval = const Duration(seconds: 4),
+    this.meter = false,
   });
 
   final Channel channel;
@@ -26,6 +27,9 @@ class SignalBadge extends StatefulWidget {
   /// Draw for a dark video overlay (white text) instead of the app surface.
   final bool dark;
   final Duration interval;
+
+  /// Draw two labelled level bars (for the channel banner) instead of a pill.
+  final bool meter;
 
   @override
   State<SignalBadge> createState() => _SignalBadgeState();
@@ -104,6 +108,27 @@ class _SignalBadgeState extends State<SignalBadge> {
             ? const Color(0xFF8BD5A0)
             : (quality >= 35 ? const Color(0xFFF5C26B) : const Color(0xFFED8796)));
     final textColor = widget.dark ? Colors.white : colors.subtext1;
+    if (widget.meter) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          _Level(
+            label: strings.signalStrength,
+            percent: signal.signalPercent,
+            text: ss,
+            color: dot,
+          ),
+          const SizedBox(height: 7),
+          _Level(
+            label: strings.signalSnr,
+            percent: signal.snrPercent,
+            text: snr,
+            color: dot,
+          ),
+        ],
+      );
+    }
     return Tooltip(
       message: '${strings.signal}: ${strings.signalSnr} $snr · '
           '${strings.signalStrength} $ss'
@@ -135,6 +160,64 @@ class _SignalBadgeState extends State<SignalBadge> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _Level extends StatelessWidget {
+  const _Level({
+    required this.label,
+    required this.percent,
+    required this.text,
+    required this.color,
+  });
+
+  final String label;
+  final double? percent;
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        SizedBox(
+          width: 34,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white60,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: ((percent ?? 0) / 100).clamp(0.0, 1.0).toDouble(),
+              minHeight: 6,
+              backgroundColor: Colors.white.withValues(alpha: 0.14),
+              color: color,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 52,
+          child: Text(
+            text,
+            textAlign: TextAlign.end,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

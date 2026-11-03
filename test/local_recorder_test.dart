@@ -2,6 +2,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mawjtvh/data/local_recorder.dart';
 
 void main() {
+  test('the programme title joins the file name', () {
+    final name = LocalRecordings.fileName(
+      'News',
+      DateTime(2026, 11, 1, 14, 5, 30),
+      title: 'Evening: Report?',
+    );
+    expect(name, 'News - Evening Report - 2026-11-01 14.05.30.ts');
+  });
+
   test('file names are safe and carry the time', () {
     final name = LocalRecordings.fileName(
       'News: 24/7?',

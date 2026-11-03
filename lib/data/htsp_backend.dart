@@ -122,7 +122,8 @@ class HtspBackend {
       case 'channelUpdate':
         final id = _int(message['channelId']);
         if (id != null) {
-          _channels[id] = _HtspChannel.fromMessage(message);
+          // An update may carry only what changed; keep the rest.
+          _channels[id] = _HtspChannel.fromMessage(message, _channels[id]);
         }
       case 'channelDelete':
         _channels.remove(_int(message['channelId']));
@@ -142,7 +143,7 @@ class HtspBackend {
       case 'eventUpdate':
         final id = _int(message['eventId']);
         if (id != null) {
-          _events[id] = message;
+          _events[id] = <String, Object?>{...?_events[id], ...message};
         }
       case 'eventDelete':
         _events.remove(_int(message['eventId']));
@@ -150,7 +151,7 @@ class HtspBackend {
       case 'dvrEntryUpdate':
         final id = _int(message['id']);
         if (id != null) {
-          _dvr[id] = message;
+          _dvr[id] = <String, Object?>{...?_dvr[id], ...message};
         }
       case 'dvrEntryDelete':
         _dvr.remove(_int(message['id']));
@@ -561,9 +562,12 @@ class _HtspChannel {
     required this.radio,
   });
 
-  factory _HtspChannel.fromMessage(Map<String, Object?> message) {
+  factory _HtspChannel.fromMessage(
+    Map<String, Object?> message, [
+    _HtspChannel? previous,
+  ]) {
     final rawTags = message['tags'];
-    var radio = false;
+    var radio = previous?.radio ?? false;
     final services = message['services'];
     if (services is List && services.isNotEmpty) {
       // Radio when every service of the channel is audio only.
@@ -575,15 +579,20 @@ class _HtspChannel {
     }
     return _HtspChannel(
       id: _int(message['channelId'])!,
-      name: _string(message['channelName']),
-      number: _int(message['channelNumber']) ?? 0,
+      name: message.containsKey('channelName')
+          ? _string(message['channelName'])
+          : (previous?.name ?? ''),
+      number: _int(message['channelNumber']) ?? previous?.number ?? 0,
       radio: radio,
-      icon: _string(message['channelIcon']),
-      tags: <int>[
-        if (rawTags is List)
-          for (final tag in rawTags)
-            if (tag is int) tag,
-      ],
+      icon: message.containsKey('channelIcon')
+          ? _string(message['channelIcon'])
+          : (previous?.icon ?? ''),
+      tags: rawTags is List
+          ? <int>[
+              for (final tag in rawTags)
+                if (tag is int) tag,
+            ]
+          : (previous?.tags ?? const <int>[]),
     );
   }
 

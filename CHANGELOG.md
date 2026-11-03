@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.4
+
+- Channels no longer vanish from the list during a session: server updates that carry only part of a channel (or programme, or recording) are merged instead of replacing it.
+- Desktop OSD rebuilt in a set-top-box style: big lower-third volume bar with segmented level, notices for muted / audio / subtitle changes, a REC badge, and a full channel banner (logo, number, clock, now with progress, next, stream details, signal bars). `I` pins or hides the banner; it also shows for a few seconds when a channel opens (setting).
+- Default audio language and default subtitle language (or subtitles off) in Settings.
+- Audio and subtitle choices are remembered per channel.
+- Local recordings carry the programme title when the guide knows it.
+
 ## 0.1.3
 
 - Tuner is released the moment you close a channel or zap away (it used to stay locked until the app was closed); a second subscription can no longer be opened by the signal badge or by a quick close and reopen.

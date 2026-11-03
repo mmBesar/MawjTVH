@@ -174,3 +174,19 @@ class _Empty extends StatelessWidget {
     );
   }
 }
+
+/// "العربية · AC3" style label for a track, for notices outside the sheet.
+String trackLabel(
+  BuildContext context, {
+  required int index,
+  required String? language,
+  required String? title,
+  required String? codec,
+}) =>
+    _TrackSheet._label(
+      context,
+      index: index,
+      language: language,
+      title: title,
+      codec: codec,
+    );

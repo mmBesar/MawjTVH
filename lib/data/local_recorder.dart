@@ -56,12 +56,20 @@ class LocalRecordings {
   }
 
   /// `News 24 - 2026-11-01 14.05.30.ts`: safe on every file system.
-  static String fileName(String channelName, DateTime now) {
+  static String fileName(String channelName, DateTime now, {String? title}) {
     String two(int n) => n.toString().padLeft(2, '0');
-    final safe = channelName
+    String clean(String text) => text
         .replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1f]'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
+    var safe = clean(channelName);
+    var programme = clean(title ?? '');
+    if (programme.length > 80) {
+      programme = programme.substring(0, 80).trim();
+    }
+    if (programme.isNotEmpty) {
+      safe = safe.isEmpty ? programme : '$safe - $programme';
+    }
     final stamp = '${now.year}-${two(now.month)}-${two(now.day)} '
         '${two(now.hour)}.${two(now.minute)}.${two(now.second)}';
     return '${safe.isEmpty ? 'Recording' : safe} - $stamp$extension';
@@ -69,12 +77,13 @@ class LocalRecordings {
 
   static Future<String> newPath(
     String configured,
-    String channelName, [
+    String channelName, {
     DateTime? now,
-  ]) async {
+    String? title,
+  }) async {
     final dir = await directory(configured);
     return '${dir.path}${Platform.pathSeparator}'
-        '${fileName(channelName, now ?? DateTime.now())}';
+        '${fileName(channelName, now ?? DateTime.now(), title: title)}';
   }
 
   static Future<List<LocalRecordingFile>> list(String configured) async {

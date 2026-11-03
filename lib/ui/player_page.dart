@@ -20,12 +20,14 @@ import '../data/app_state.dart';
 import '../data/local_recorder.dart';
 import '../data/models.dart';
 import '../data/mpv_runtime.dart';
+import '../data/track_prefs.dart';
 import '../l10n/strings.dart';
 import '../l10n/tvh_strings.dart';
 import 'desktop_player_page.dart';
 import 'widgets/channel_logo.dart';
 import 'widgets/record_now_button.dart';
 import 'widgets/signal_badge.dart';
+import 'widgets/stb_osd.dart';
 import 'widgets/track_sheet.dart';
 import 'widgets/wave.dart';
 
@@ -173,6 +175,16 @@ class _PlayerPageState extends State<PlayerPage> {
   double _volume = 100;
   bool _adjustingBrightness = true;
   _OsdKind? _osdKind;
+  IconData? _osdIcon;
+  String? _osdTitle;
+  String? _osdSubtitle;
+  String? _lastAudioId;
+  String? _lastSubtitleId;
+  bool _audioApplied = false;
+  bool _subApplied = false;
+  DateTime _ignoreTracksUntil = DateTime.fromMillisecondsSinceEpoch(0);
+  StreamSubscription<Tracks>? _tracksSubscription;
+  StreamSubscription<Track>? _trackSubscription;
   late AppState _appState;
   bool _infoVisible = false;
   Timer? _infoTimer;
@@ -251,6 +263,8 @@ class _PlayerPageState extends State<PlayerPage> {
         setState(() => _buffering = buffering);
       }
     });
+    _tracksSubscription = _player.stream.tracks.listen(_applyTracks);
+    _trackSubscription = _player.stream.track.listen(_onTrackChanged);
     _volumeSubscription = _player.stream.volume.listen((volume) {
       _volume = volume;
     });
@@ -326,6 +340,13 @@ class _PlayerPageState extends State<PlayerPage> {
       }
     });
     unawaited(state.markWatched(_channel));
+    _audioApplied = false;
+    _subApplied = false;
+    _lastAudioId = null;
+    _lastSubtitleId = null;
+    if (!auto) {
+      _flashBanner();
+    }
 
     try {
       await _setMpvProperty(
@@ -396,6 +417,8 @@ class _PlayerPageState extends State<PlayerPage> {
       final path = await LocalRecordings.newPath(
         state.settings.recordDir,
         _channel.name,
+        // The programme on air, when the guide knows it, goes in the name.
+        title: state.epg.nowFor(_channel, DateTime.now())?.title,
       );
       final recorder = await StreamRecorder.start(
         url: _channel.url,
@@ -638,6 +661,21 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
+  void _showMessage(IconData icon, String title, [String? subtitle]) {
+    _osdTimer?.cancel();
+    setState(() {
+      _osdKind = _OsdKind.message;
+      _osdIcon = icon;
+      _osdTitle = title;
+      _osdSubtitle = subtitle;
+    });
+    _osdTimer = Timer(const Duration(milliseconds: 1800), () {
+      if (mounted) {
+        setState(() => _osdKind = null);
+      }
+    });
+  }
+
   void _showOsd(_OsdKind kind, double value) {
     _osdTimer?.cancel();
     setState(() {
@@ -664,18 +702,188 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
+  // ---- Default and remembered tracks -------------------------------------
+
+  static bool _realTrack(String id) => id != 'auto' && id != 'no';
+
+  /// Picks the audio and subtitle tracks once the stream's tracks are known:
+  /// what was chosen last time on this channel, else the preferred language.
+  void _applyTracks(Tracks tracks) {
+    if (!mounted) {
+      return;
+    }
+    final settings = _appState.settings;
+    final remember = settings.rememberTracks;
+    if (!_audioApplied) {
+      final audio = tracks.audio.where((t) => _realTrack(t.id)).toList();
+      if (audio.isNotEmpty) {
+        _audioApplied = true;
+        final index = pickTrack(
+          <({String? language, String? title})>[
+            for (final t in audio) (language: t.language, title: t.title),
+          ],
+          remembered:
+              remember ? _appState.rememberedTrack(_channel, audio: true) : null,
+          preferred: settings.preferredAudioLang,
+        );
+        if (index != null) {
+          _lastAudioId = audio[index].id;
+          if (audio[index].id != _player.state.track.audio.id) {
+            _ignoreTracksUntil = DateTime.now().add(const Duration(seconds: 2));
+            unawaited(_player.setAudioTrack(audio[index]));
+          }
+        }
+      }
+    }
+    if (!_subApplied) {
+      final rememberedSub =
+          remember ? _appState.rememberedTrack(_channel, audio: false) : null;
+      final off = rememberedSub == 'off' ||
+          (rememberedSub == null && settings.preferredSubtitleLang == 'off');
+      if (off) {
+        _subApplied = true;
+        _lastSubtitleId = 'no';
+        if (_player.state.track.subtitle.id != 'no') {
+          _ignoreTracksUntil = DateTime.now().add(const Duration(seconds: 2));
+          unawaited(_player.setSubtitleTrack(SubtitleTrack.no()));
+        }
+      } else {
+        final subs = tracks.subtitle.where((t) => _realTrack(t.id)).toList();
+        if (subs.isNotEmpty) {
+          final index = pickTrack(
+            <({String? language, String? title})>[
+              for (final t in subs) (language: t.language, title: t.title),
+            ],
+            remembered: rememberedSub,
+            preferred: settings.preferredSubtitleLang,
+          );
+          if (index != null) {
+            _subApplied = true;
+            _lastSubtitleId = subs[index].id;
+            _ignoreTracksUntil = DateTime.now().add(const Duration(seconds: 2));
+            unawaited(_player.setSubtitleTrack(subs[index]));
+          }
+        }
+      }
+    }
+  }
+
+  /// A change after the automatic pick is the user's: remember it, show it.
+  void _onTrackChanged(Track track) {
+    if (!mounted ||
+        !_audioApplied ||
+        DateTime.now().isBefore(_ignoreTracksUntil)) {
+      return;
+    }
+    final strings = context.strings;
+    final tracks = _player.state.tracks;
+    final remember = _appState.settings.rememberTracks;
+    final audio = track.audio;
+    if (_realTrack(audio.id) && audio.id != _lastAudioId) {
+      final first = _lastAudioId == null;
+      _lastAudioId = audio.id;
+      if (!first) {
+        if (remember) {
+          _appState.rememberTrack(
+            _channel,
+            audio: true,
+            key: trackKey(audio.language, audio.title),
+          );
+        }
+        final index = tracks.audio.where((t) => _realTrack(t.id)).toList().indexWhere((t) => t.id == audio.id);
+        _showMessage(
+          Icons.audiotrack_rounded,
+          strings.audioLabel,
+          trackLabel(
+            context,
+            index: index < 0 ? 0 : index,
+            language: audio.language,
+            title: audio.title,
+            codec: audio.codec,
+          ),
+        );
+        return;
+      }
+    }
+    final subtitle = track.subtitle;
+    if (_subApplied && subtitle.id != _lastSubtitleId) {
+      final first = _lastSubtitleId == null;
+      _lastSubtitleId = subtitle.id;
+      if (first) {
+        return;
+      }
+      if (subtitle.id == 'no') {
+        if (remember) {
+          _appState.rememberTrack(_channel, audio: false, key: 'off');
+        }
+        _showMessage(Icons.subtitles_off_rounded, strings.subtitleLabel, strings.subtitlesOff);
+      } else if (_realTrack(subtitle.id)) {
+        if (remember) {
+          _appState.rememberTrack(
+            _channel,
+            audio: false,
+            key: trackKey(subtitle.language, subtitle.title),
+          );
+        }
+        final index = tracks.subtitle.where((t) => _realTrack(t.id)).toList().indexWhere((t) => t.id == subtitle.id);
+        _showMessage(
+          Icons.subtitles_rounded,
+          strings.subtitleLabel,
+          trackLabel(
+            context,
+            index: index < 0 ? 0 : index,
+            language: subtitle.language,
+            title: subtitle.title,
+            codec: subtitle.codec,
+          ),
+        );
+      }
+    }
+  }
+
   // ---- Stream info (I) ----------------------------------------------------
 
-  void _toggleInfo() {
-    setState(() => _infoVisible = !_infoVisible);
+  bool _infoPinned = false;
+  Timer? _bannerTimer;
+
+  void _setInfo(bool visible) {
     _infoTimer?.cancel();
-    if (_infoVisible) {
+    _bannerTimer?.cancel();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _infoVisible = visible);
+    if (visible) {
       unawaited(_refreshInfo());
       _infoTimer = Timer.periodic(
         const Duration(seconds: 1),
         (_) => unawaited(_refreshInfo()),
       );
     }
+  }
+
+  /// `I`: pin the banner, or hide it.
+  void _toggleInfo() {
+    if (_infoVisible) {
+      _infoPinned = false;
+      _setInfo(false);
+    } else {
+      _infoPinned = true;
+      _setInfo(true);
+    }
+  }
+
+  /// Show the banner for a few seconds when a channel opens.
+  void _flashBanner() {
+    if (!kIsDesktop || _infoPinned || !_appState.settings.zapBanner) {
+      return;
+    }
+    _setInfo(true);
+    _bannerTimer = Timer(const Duration(seconds: 7), () {
+      if (mounted && !_infoPinned) {
+        _setInfo(false);
+      }
+    });
   }
 
   Future<void> _refreshInfo() async {
@@ -711,7 +919,9 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _toggleMute() {
-    unawaited(_player.setVolume(_volume <= 0.01 ? 100 : 0));
+    final target = _volume <= 0.01 ? 100.0 : 0.0;
+    unawaited(_player.setVolume(target));
+    _showOsd(_OsdKind.volume, target / 100);
     _showControls();
   }
 
@@ -859,6 +1069,7 @@ class _PlayerPageState extends State<PlayerPage> {
     _osdTimer?.cancel();
     _errorTimer?.cancel();
     _infoTimer?.cancel();
+    _bannerTimer?.cancel();
     final recorder = _recorder;
     _recorder = null;
     if (recorder != null) {
@@ -868,6 +1079,8 @@ class _PlayerPageState extends State<PlayerPage> {
     _playingSubscription?.cancel();
     _bufferingSubscription?.cancel();
     _volumeSubscription?.cancel();
+    _tracksSubscription?.cancel();
+    _trackSubscription?.cancel();
     _videoParamsSubscription?.cancel();
     _logSubscription?.cancel();
     _focusNode.dispose();
@@ -1007,9 +1220,8 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
-  Widget _infoHud(AppState state) {
+  Widget _infoBanner(AppState state) {
     final strings = context.strings;
-    final colors = context.mawjColors;
     final use24 = state.settings.use24HourTime;
     final now = state.epg.nowFor(_channel, state.now);
     final next = state.epg.nextFor(_channel, state.now);
@@ -1022,136 +1234,56 @@ class _PlayerPageState extends State<PlayerPage> {
         '${strings.formatTime(programme.start, use24HourTime: use24)} – '
         '${strings.formatTime(programme.stop, use24HourTime: use24)}';
 
-    Widget row(String label, String value) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 3),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            SizedBox(
-              width: 74,
-              child: Text(
-                label,
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-            ),
-            Flexible(
-              child: Text(
-                value,
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-      );
+    double? progress;
+    if (now != null) {
+      final total = now.stop.difference(now.start).inSeconds;
+      if (total > 0) {
+        progress = state.now.difference(now.start).inSeconds / total;
+      }
     }
 
-    final video = <String>[
+    final fps = double.tryParse(props['estimated-vf-fps'] ?? '');
+    final channels = props['audio-params/hr-channels'];
+    final decoder = props['hwdec-current'];
+    final chips = <String>[
       if (width > 0 && height > 0) '$width×$height',
       if (props['video-codec'] != null)
         props['video-codec']!.split(' ').first.toUpperCase(),
-      if (props['estimated-vf-fps'] != null)
-        '${double.tryParse(props['estimated-vf-fps']!)?.toStringAsFixed(0) ?? ''} fps',
-    ].where((part) => part.trim().isNotEmpty).join(' · ');
-    final audio = <String>[
+      if (fps != null && fps > 0) '${fps.round()} fps',
       if (props['audio-codec-name'] != null)
-        props['audio-codec-name']!.toUpperCase(),
-      if (props['audio-params/hr-channels'] != null)
-        props['audio-params/hr-channels']!,
-      if (props['audio-params/samplerate'] != null)
-        '${props['audio-params/samplerate']} Hz',
-    ].join(' · ');
-    final decoder = props['hwdec-current'];
+        <String>[
+          props['audio-codec-name']!.toUpperCase(),
+          if (channels != null && channels.isNotEmpty) channels,
+        ].join(' '),
+      if (decoder != null && decoder != 'no') decoder,
+      if (props['frame-drop-count'] != null &&
+          props['frame-drop-count'] != '0')
+        '${strings.infoDropped} ${props['frame-drop-count']}',
+    ];
 
-    return Align(
-      alignment: AlignmentDirectional.topStart,
-      child: Padding(
-        padding: const EdgeInsetsDirectional.fromSTEB(20, 76, 20, 0),
-        child: IgnorePointer(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 420),
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(14),
-              border: Border(
-                left: BorderSide(color: colors.accent, width: 3),
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  '${_channel.displayNumber}  ${_channel.name}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (now != null) ...<Widget>[
-                  const SizedBox(height: 8),
-                  Text(
-                    '${strings.now} · ${range(now)}',
-                    style: TextStyle(
-                      color: colors.accent,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    now.displayTitle,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if ((now.description ?? '').isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 3),
-                      child: Text(
-                        now.description!,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                ],
-                if (next != null) ...<Widget>[
-                  const SizedBox(height: 8),
-                  Text(
-                    '${strings.next} · ${range(next)}',
-                    style: const TextStyle(
-                      color: Colors.white54,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    next.displayTitle,
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
-                  ),
-                ],
-                const SizedBox(height: 10),
-                Container(height: 1, color: Colors.white12),
-                const SizedBox(height: 6),
-                if (video.isNotEmpty) row(strings.infoVideo, video),
-                if (audio.isNotEmpty) row(strings.infoAudio, audio),
-                if (decoder != null && decoder != 'no')
-                  row(strings.infoDecoder, decoder),
-                if (props['frame-drop-count'] != null &&
-                    props['frame-drop-count'] != '0')
-                  row(strings.infoDropped, props['frame-drop-count']!),
-              ],
-            ),
-          ),
+    final clock = state.now;
+    return StbBanner(
+      data: StbBannerData(
+        logo: ChannelLogo(
+          channel: _channel,
+          allowInsecure: state.activeSource?.allowInsecureCerts ?? false,
+          size: 92,
+          radius: 18,
         ),
+        number: _channel.displayNumber,
+        name: _channel.name,
+        clock: strings.formatTime(clock, use24HourTime: use24),
+        nowLabel: strings.now,
+        nextLabel: strings.next,
+        nowTitle: now?.displayTitle,
+        nowRange: now == null ? null : range(now),
+        progress: progress,
+        nowDescription: now?.description,
+        nextTitle: next?.displayTitle,
+        nextRange: next == null ? null : range(next),
+        chips: chips,
+        signal: SignalBadge(channel: _channel, meter: true),
+        recording: _localRecording || state.activeRecordingFor(_channel) != null,
       ),
     );
   }
@@ -1247,13 +1379,27 @@ class _PlayerPageState extends State<PlayerPage> {
                   ),
                 if (problem) _buildProblem(strings),
                 _buildControls(state, immersive: immersive, constraints: constraints),
-                if (_infoVisible) _infoHud(state),
+                if (_infoVisible && _osdKind == null)
+                  IgnorePointer(child: _infoBanner(state)),
+                if (kIsDesktop &&
+                    !_infoVisible &&
+                    (_localRecording || state.activeRecordingFor(_channel) != null))
+                  const Align(
+                    alignment: AlignmentDirectional.topEnd,
+                    child: Padding(
+                      padding: EdgeInsetsDirectional.only(top: 76, end: 20),
+                      child: IgnorePointer(child: StbRecBadge()),
+                    ),
+                  ),
                 if (_osdKind != null)
                   IgnorePointer(
                     child: _GestureOsd(
                       kind: _osdKind!,
                       value: _osdValue,
                       strings: strings,
+                      icon: _osdIcon,
+                      title: _osdTitle,
+                      subtitle: _osdSubtitle,
                     ),
                   ),
               ],
@@ -2139,23 +2285,47 @@ class PlayerChannelStripState extends State<PlayerChannelStrip> {
   }
 }
 
-enum _OsdKind { brightness, volume }
+enum _OsdKind { brightness, volume, message }
 
 class _GestureOsd extends StatelessWidget {
   const _GestureOsd({
     required this.kind,
     required this.value,
     required this.strings,
+    this.icon,
+    this.title,
+    this.subtitle,
   });
 
   final _OsdKind kind;
   final double value;
   final AppStrings strings;
+  final IconData? icon;
+  final String? title;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
     final brightness = kind == _OsdKind.brightness;
     final percent = (value * 100).round();
+    if (kind == _OsdKind.message) {
+      return StbMessageOsd(
+        icon: icon ?? Icons.info_outline_rounded,
+        title: title ?? '',
+        subtitle: subtitle,
+      );
+    }
+    if (kIsDesktop) {
+      return StbValueOsd(
+        icon: brightness
+            ? Icons.brightness_6_rounded
+            : (percent == 0
+                ? Icons.volume_off_rounded
+                : Icons.volume_up_rounded),
+        label: brightness ? strings.brightness : strings.volume,
+        value: value,
+      );
+    }
     return Center(
       child: Container(
         padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),

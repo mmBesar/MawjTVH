@@ -55,6 +55,7 @@ class AppState extends ChangeNotifier {
   bool _initialLoadStarted = false;
   List<String> _favorites = <String>[];
   List<String> _recents = <String>[];
+  Map<String, String> _tracks = <String, String>{};
   Map<String, Channel> _channelById = const <String, Channel>{};
   List<String> _groups = const <String>[];
   String? _groupFilter;
@@ -262,6 +263,7 @@ class AppState extends ChangeNotifier {
     final id = activeSource?.id;
     _favorites = id == null ? <String>[] : _storage.loadFavorites(id);
     _recents = id == null ? <String>[] : _storage.loadRecents(id);
+    _tracks = id == null ? <String, String>{} : _storage.loadTracks(id);
   }
 
   void _indexChannels(List<Channel> channels) {
@@ -564,6 +566,37 @@ class AppState extends ChangeNotifier {
 
   Future<void> setRichVisuals(bool value) =>
       updateSettings(_settings.copyWith(richVisuals: value));
+
+  Future<void> setPreferredAudioLang(String value) =>
+      updateSettings(_settings.copyWith(preferredAudioLang: value));
+
+  Future<void> setPreferredSubtitleLang(String value) =>
+      updateSettings(_settings.copyWith(preferredSubtitleLang: value));
+
+  Future<void> setRememberTracks(bool value) =>
+      updateSettings(_settings.copyWith(rememberTracks: value));
+
+  Future<void> setZapBanner(bool value) =>
+      updateSettings(_settings.copyWith(zapBanner: value));
+
+  /// The audio (or subtitle) choice last made on [channel], as a track key.
+  String? rememberedTrack(Channel channel, {required bool audio}) =>
+      _tracks['${channel.id}.${audio ? 'a' : 's'}'];
+
+  void rememberTrack(Channel channel, {required bool audio, required String key}) {
+    if (isSyntheticChannel(channel)) {
+      return;
+    }
+    final name = '${channel.id}.${audio ? 'a' : 's'}';
+    if (_tracks[name] == key) {
+      return;
+    }
+    _tracks[name] = key;
+    if (_tracks.length > 800) {
+      _tracks.remove(_tracks.keys.first);
+    }
+    unawaited(_storage.saveTracks(channel.sourceId, _tracks));
+  }
 
   Future<void> setReduceMotion(bool value) =>
       updateSettings(_settings.copyWith(reduceMotion: value));

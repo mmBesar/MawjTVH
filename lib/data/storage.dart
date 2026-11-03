@@ -12,6 +12,7 @@ class StorageService {
 
   static const String _favoritesKey = 'mawjtvh.favorites.v1';
   static const String _recentsKey = 'mawjtvh.recents.v1';
+  static const String _tracksKey = 'mawjtvh.tracks.v1';
 
   final SharedPreferences _prefs;
 
@@ -88,6 +89,47 @@ class StorageService {
 
   Future<void> saveRecents(String sourceId, List<String> ids) =>
       _saveIdList(_recentsKey, sourceId, ids);
+
+  /// Audio and subtitle choices per channel (`<channel>.a` / `<channel>.s`).
+  Map<String, String> loadTracks(String sourceId) {
+    final raw = _prefs.getString(_tracksKey);
+    if (raw == null || raw.isEmpty) {
+      return <String, String>{};
+    }
+    try {
+      final json = jsonDecode(raw);
+      if (json is Map) {
+        final map = json[sourceId];
+        if (map is Map) {
+          return <String, String>{
+            for (final entry in map.entries)
+              if (entry.key is String && entry.value is String)
+                entry.key as String: entry.value as String,
+          };
+        }
+      }
+    } catch (_) {
+      // A damaged map must not stop the app from starting.
+    }
+    return <String, String>{};
+  }
+
+  Future<void> saveTracks(String sourceId, Map<String, String> tracks) {
+    Map<String, dynamic> all = <String, dynamic>{};
+    final raw = _prefs.getString(_tracksKey);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final json = jsonDecode(raw);
+        if (json is Map) {
+          all = json.cast<String, dynamic>();
+        }
+      } catch (_) {
+        all = <String, dynamic>{};
+      }
+    }
+    all[sourceId] = tracks;
+    return _prefs.setString(_tracksKey, jsonEncode(all));
+  }
 
   List<String> _loadIdList(String key, String sourceId) {
     final raw = _prefs.getString(key);

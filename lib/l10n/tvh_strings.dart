@@ -151,6 +151,25 @@ extension TvhStrings on AppStrings {
   String get infoAudio => isArabic ? 'الصوت' : 'Audio';
   String get infoDecoder => isArabic ? 'فك الترميز' : 'Decoder';
   String get infoDropped => isArabic ? 'إطارات مفقودة' : 'Dropped';
+  String get audioAndSubtitles => isArabic ? 'الصوت والترجمة' : 'Audio & subtitles';
+  String get preferredAudio => isArabic ? 'لغة الصوت المفضلة' : 'Preferred audio language';
+  String get preferredSubtitle =>
+      isArabic ? 'لغة الترجمة المفضلة' : 'Preferred subtitle language';
+  String get streamDefault => isArabic ? 'افتراضي البث' : 'Stream default';
+  String get subtitlesOffByDefault =>
+      isArabic ? 'بدون ترجمة (افتراضي)' : 'Off by default';
+  String get rememberTracks =>
+      isArabic ? 'تذكّر المسارات لكل قناة' : 'Remember tracks per channel';
+  String get rememberTracksHelp => isArabic
+      ? 'يستعيد آخر صوت وترجمة اخترتهما على كل قناة.'
+      : 'Brings back the audio and subtitle you last picked on each channel.';
+  String get zapBanner => isArabic ? 'شريط القناة عند الفتح' : 'Channel banner on open';
+  String get zapBannerHelp => isArabic
+      ? 'يعرض شريطًا بمعلومات القناة والبرنامج عند فتح قناة (سطح المكتب). اضغط I لإظهاره أو إخفائه.'
+      : 'Shows a banner with the channel and programme when one opens (desktop). Press I to pin or hide it.';
+  String get muted => isArabic ? 'كتم الصوت' : 'Muted';
+  String get audioLabel => isArabic ? 'الصوت' : 'Audio';
+  String get subtitleLabel => isArabic ? 'الترجمة' : 'Subtitles';
   String get streamInfo => isArabic ? 'معلومات البث' : 'Stream info';
   String get inAppRenderer => isArabic ? 'عرض الفيديو داخل التطبيق' : 'In-app video rendering';
   String get rendererAuto => isArabic ? 'تلقائي (GPU)' : 'Automatic (GPU)';

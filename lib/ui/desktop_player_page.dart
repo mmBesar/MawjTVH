@@ -189,6 +189,8 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
       final path = await LocalRecordings.newPath(
         state.settings.recordDir,
         _channel.name,
+        // The programme on air, when the guide knows it, goes in the name.
+        title: state.epg.nowFor(_channel, DateTime.now())?.title,
       );
       final recorder = await StreamRecorder.start(
         url: _channel.url,

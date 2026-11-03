@@ -312,6 +312,10 @@ class AppSettings {
     this.reduceMotion = false,
     this.inAppRenderer = 'auto',
     this.lastGroup = '',
+    this.preferredAudioLang = '',
+    this.preferredSubtitleLang = 'off',
+    this.rememberTracks = true,
+    this.zapBanner = true,
   });
 
   factory AppSettings.defaults() => const AppSettings(
@@ -368,6 +372,19 @@ class AppSettings {
   /// The channel group (tag) last chosen on Watch or Guide; empty means all.
   final String lastGroup;
 
+  /// Language (ISO 639 code) picked by default for audio; empty keeps the
+  /// stream's own default.
+  final String preferredAudioLang;
+
+  /// Language picked by default for subtitles; `off` keeps them disabled.
+  final String preferredSubtitleLang;
+
+  /// Reuse the audio and subtitle tracks last chosen on each channel.
+  final bool rememberTracks;
+
+  /// Desktop: show the channel banner when a channel opens.
+  final bool zapBanner;
+
   AppSettings copyWith({
     ThemeFamily? themeFamily,
     ThemeAccent? accent,
@@ -387,6 +404,10 @@ class AppSettings {
     bool? reduceMotion,
     String? inAppRenderer,
     String? lastGroup,
+    String? preferredAudioLang,
+    String? preferredSubtitleLang,
+    bool? rememberTracks,
+    bool? zapBanner,
   }) {
     return AppSettings(
       themeFamily: themeFamily ?? this.themeFamily,
@@ -409,6 +430,11 @@ class AppSettings {
       reduceMotion: reduceMotion ?? this.reduceMotion,
       inAppRenderer: inAppRenderer ?? this.inAppRenderer,
       lastGroup: lastGroup ?? this.lastGroup,
+      preferredAudioLang: preferredAudioLang ?? this.preferredAudioLang,
+      preferredSubtitleLang:
+          preferredSubtitleLang ?? this.preferredSubtitleLang,
+      rememberTracks: rememberTracks ?? this.rememberTracks,
+      zapBanner: zapBanner ?? this.zapBanner,
     );
   }
 
@@ -431,6 +457,10 @@ class AppSettings {
         'reduceMotion': reduceMotion,
         'inAppRenderer': inAppRenderer,
         'lastGroup': lastGroup,
+        'preferredAudioLang': preferredAudioLang,
+        'preferredSubtitleLang': preferredSubtitleLang,
+        'rememberTracks': rememberTracks,
+        'zapBanner': zapBanner,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -465,6 +495,10 @@ class AppSettings {
       reduceMotion: json['reduceMotion'] as bool? ?? false,
       inAppRenderer: json['inAppRenderer'] as String? ?? 'auto',
       lastGroup: json['lastGroup'] as String? ?? '',
+      preferredAudioLang: json['preferredAudioLang'] as String? ?? '',
+      preferredSubtitleLang: json['preferredSubtitleLang'] as String? ?? 'off',
+      rememberTracks: json['rememberTracks'] as bool? ?? true,
+      zapBanner: json['zapBanner'] as bool? ?? true,
     );
   }
 }

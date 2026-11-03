@@ -13,6 +13,7 @@ import '../../data/app_state.dart';
 import '../../data/local_recorder.dart';
 import '../../data/models.dart';
 import '../../data/mpv_runtime.dart';
+import '../../l10n/languages.dart';
 import '../../l10n/strings.dart';
 import '../../l10n/tvh_strings.dart';
 import 'server_page.dart';
@@ -98,6 +99,106 @@ class SettingsPage extends StatelessWidget {
                           ),
                       ],
                     ),
+                  ],
+                ),
+                _Section(
+                  title: strings.audioAndSubtitles,
+                  children: <Widget>[
+                    InputDecorator(
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.audiotrack_rounded),
+                        labelText: strings.preferredAudio,
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _langOptions.contains(settings.preferredAudioLang)
+                              ? settings.preferredAudioLang
+                              : '',
+                          isExpanded: true,
+                          isDense: true,
+                          items: <DropdownMenuItem<String>>[
+                            DropdownMenuItem<String>(
+                              value: '',
+                              child: Text(strings.streamDefault),
+                            ),
+                            for (final code in _langOptions.where((c) => c.isNotEmpty))
+                              DropdownMenuItem<String>(
+                                value: code,
+                                child: Text(
+                                  languageName(code, arabic: strings.isArabic),
+                                ),
+                              ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              unawaited(state.setPreferredAudioLang(value));
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    InputDecorator(
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.subtitles_rounded),
+                        labelText: strings.preferredSubtitle,
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: settings.preferredSubtitleLang == 'off' ||
+                                  _langOptions.contains(settings.preferredSubtitleLang)
+                              ? settings.preferredSubtitleLang
+                              : 'off',
+                          isExpanded: true,
+                          isDense: true,
+                          items: <DropdownMenuItem<String>>[
+                            DropdownMenuItem<String>(
+                              value: 'off',
+                              child: Text(strings.subtitlesOffByDefault),
+                            ),
+                            for (final code in _langOptions.where((c) => c.isNotEmpty))
+                              DropdownMenuItem<String>(
+                                value: code,
+                                child: Text(
+                                  languageName(code, arabic: strings.isArabic),
+                                ),
+                              ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              unawaited(state.setPreferredSubtitleLang(value));
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    SwitchListTile(
+                      value: settings.rememberTracks,
+                      onChanged: (value) =>
+                          unawaited(state.setRememberTracks(value)),
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(strings.rememberTracks),
+                      subtitle: Text(
+                        strings.rememberTracksHelp,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colors.subtext0,
+                            ),
+                      ),
+                    ),
+                    if (kIsDesktop)
+                      SwitchListTile(
+                        value: settings.zapBanner,
+                        onChanged: (value) =>
+                            unawaited(state.setZapBanner(value)),
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(strings.zapBanner),
+                        subtitle: Text(
+                          strings.zapBannerHelp,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: colors.subtext0,
+                              ),
+                        ),
+                      ),
                   ],
                 ),
                 _Section(
@@ -1004,3 +1105,25 @@ class _MpvPathFieldState extends State<_MpvPathField> {
     );
   }
 }
+
+/// Languages offered as defaults; empty is "stream default".
+const List<String> _langOptions = <String>[
+  '',
+  'ara',
+  'eng',
+  'fra',
+  'deu',
+  'spa',
+  'ita',
+  'por',
+  'rus',
+  'tur',
+  'fas',
+  'kur',
+  'hin',
+  'urd',
+  'heb',
+  'zho',
+  'jpn',
+  'kor',
+];
