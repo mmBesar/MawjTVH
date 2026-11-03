@@ -27,6 +27,7 @@ import 'desktop_player_page.dart';
 import 'widgets/channel_logo.dart';
 import 'widgets/record_now_button.dart';
 import 'widgets/signal_badge.dart';
+import 'widgets/stb_browser.dart';
 import 'widgets/stb_osd.dart';
 import 'widgets/track_sheet.dart';
 import 'widgets/wave.dart';
@@ -178,6 +179,13 @@ class _PlayerPageState extends State<PlayerPage> {
   IconData? _osdIcon;
   String? _osdTitle;
   String? _osdSubtitle;
+  bool _browserOpen = false;
+  bool _helpOpen = false;
+  int _aspectMode = 0;
+  bool _deinterlace = false;
+  double _audioDelay = 0;
+  String _digits = '';
+  Timer? _digitTimer;
   String? _lastAudioId;
   String? _lastSubtitleId;
   bool _audioApplied = false;
@@ -497,6 +505,10 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _toggleControls() {
+    if (_browserOpen) {
+      _closeBrowser();
+      return;
+    }
     if (_controlsVisible) {
       _hideTimer?.cancel();
       setState(() => _controlsVisible = false);
@@ -697,9 +709,167 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _onScroll(PointerSignalEvent event) {
-    if (event is PointerScrollEvent && event.scrollDelta.dy != 0) {
+    if (!_browserOpen &&
+        !_helpOpen &&
+        event is PointerScrollEvent &&
+        event.scrollDelta.dy != 0) {
       _adjustVolume(event.scrollDelta.dy < 0 ? 5 : -5);
     }
+  }
+
+  // ---- Channel browser, shortcuts and picture options -----------------------
+
+  void _openBrowser() {
+    if (_browserOpen) {
+      return;
+    }
+    _hideTimer?.cancel();
+    setState(() {
+      _browserOpen = true;
+      _helpOpen = false;
+    });
+  }
+
+  void _closeBrowser() {
+    if (!_browserOpen) {
+      return;
+    }
+    setState(() => _browserOpen = false);
+    _focusNode.requestFocus();
+    _scheduleHide();
+  }
+
+  void _tuneFromBrowser(Channel channel) {
+    _closeBrowser();
+    _switchTo(channel);
+  }
+
+  void _toggleHelp() {
+    setState(() {
+      _helpOpen = !_helpOpen;
+      _browserOpen = false;
+    });
+    if (!_helpOpen) {
+      _focusNode.requestFocus();
+    }
+  }
+
+  static const List<double?> _aspectRatios = <double?>[
+    null,
+    16 / 9,
+    4 / 3,
+    21 / 9,
+    null,
+  ];
+
+  void _cycleAspect() {
+    final next = (_aspectMode + 1) % _aspectRatios.length;
+    setState(() => _aspectMode = next);
+    final strings = context.strings;
+    _showMessage(
+      Icons.aspect_ratio_rounded,
+      strings.aspectLabel,
+      strings.aspectName(next),
+    );
+  }
+
+  void _toggleDeinterlace() {
+    final next = !_deinterlace;
+    setState(() => _deinterlace = next);
+    unawaited(_setMpvProperty('deinterlace', next ? 'yes' : 'no'));
+    final strings = context.strings;
+    _showMessage(
+      Icons.blur_linear_rounded,
+      strings.deinterlaceLabel,
+      next ? strings.onWord : strings.offWord,
+    );
+  }
+
+  void _nudgeAudioDelay(double seconds) {
+    final next = ((_audioDelay + seconds) * 1000).round() / 1000;
+    _audioDelay = next;
+    unawaited(_setMpvProperty('audio-delay', next.toString()));
+    final ms = (next * 1000).round();
+    _showMessage(
+      Icons.sync_rounded,
+      context.strings.audioDelayLabel,
+      '${ms > 0 ? '+' : ''}$ms ms',
+    );
+  }
+
+  void _cycleAudio() {
+    final strings = context.strings;
+    final audio =
+        _player.state.tracks.audio.where((t) => _realTrack(t.id)).toList();
+    if (audio.length < 2) {
+      _showMessage(
+        Icons.audiotrack_rounded,
+        strings.audioLabel,
+        strings.noOtherTracks,
+      );
+      return;
+    }
+    _lastAudioId ??= _player.state.track.audio.id;
+    final current =
+        audio.indexWhere((t) => t.id == _player.state.track.audio.id);
+    unawaited(_player.setAudioTrack(audio[(current + 1) % audio.length]));
+  }
+
+  void _cycleSubtitle() {
+    final strings = context.strings;
+    final subtitles =
+        _player.state.tracks.subtitle.where((t) => _realTrack(t.id)).toList();
+    if (subtitles.isEmpty) {
+      _showMessage(
+        Icons.subtitles_off_rounded,
+        strings.subtitleLabel,
+        strings.noOtherTracks,
+      );
+      return;
+    }
+    _subApplied = true;
+    _lastSubtitleId ??= _player.state.track.subtitle.id;
+    final currentId = _player.state.track.subtitle.id;
+    final index = subtitles.indexWhere((t) => t.id == currentId);
+    if (currentId == 'no' || currentId == 'auto' || index < 0) {
+      unawaited(_player.setSubtitleTrack(subtitles.first));
+    } else if (index + 1 < subtitles.length) {
+      unawaited(_player.setSubtitleTrack(subtitles[index + 1]));
+    } else {
+      unawaited(_player.setSubtitleTrack(SubtitleTrack.no()));
+    }
+  }
+
+  /// Number keys build a channel number; it tunes after a short pause, or at
+  /// once on Enter.
+  void _digit(int value) {
+    if (_digits.length >= 4) {
+      return;
+    }
+    _digits += '$value';
+    _showMessage(Icons.dialpad_rounded, '${context.strings.channelWord} $_digits');
+    _digitTimer?.cancel();
+    _digitTimer = Timer(const Duration(milliseconds: 1700), _commitDigits);
+  }
+
+  void _commitDigits() {
+    _digitTimer?.cancel();
+    final number = _digits;
+    _digits = '';
+    if (number.isEmpty || !mounted) {
+      return;
+    }
+    final target = _appState.channels
+        .where((channel) => channel.number == number)
+        .toList();
+    if (target.isEmpty) {
+      _showMessage(
+        Icons.dialpad_rounded,
+        context.strings.noChannelNumber(number),
+      );
+      return;
+    }
+    _switchTo(target.first);
   }
 
   // ---- Default and remembered tracks -------------------------------------
@@ -1070,6 +1240,7 @@ class _PlayerPageState extends State<PlayerPage> {
     _errorTimer?.cancel();
     _infoTimer?.cancel();
     _bannerTimer?.cancel();
+    _digitTimer?.cancel();
     final recorder = _recorder;
     _recorder = null;
     if (recorder != null) {
@@ -1131,7 +1302,9 @@ class _PlayerPageState extends State<PlayerPage> {
       child: CallbackShortcuts(
         bindings: <ShortcutActivator, VoidCallback>{
           const SingleActivator(LogicalKeyboardKey.escape): () {
-            if (_fullscreen) {
+            if (_helpOpen) {
+              _toggleHelp();
+            } else if (_fullscreen) {
               unawaited(_toggleFullscreen());
             } else {
               Navigator.of(context).maybePop();
@@ -1155,6 +1328,57 @@ class _PlayerPageState extends State<PlayerPage> {
           const SingleActivator(LogicalKeyboardKey.keyD): () {
             unawaited(_showDiagnostics());
           },
+          const SingleActivator(LogicalKeyboardKey.keyC): _openBrowser,
+          const SingleActivator(LogicalKeyboardKey.enter): () {
+            if (_digits.isNotEmpty) {
+              _commitDigits();
+            } else {
+              _openBrowser();
+            }
+          },
+          const SingleActivator(LogicalKeyboardKey.numpadEnter): () {
+            if (_digits.isNotEmpty) {
+              _commitDigits();
+            } else {
+              _openBrowser();
+            }
+          },
+          const SingleActivator(LogicalKeyboardKey.keyH): _toggleHelp,
+          const SingleActivator(LogicalKeyboardKey.f1): _toggleHelp,
+          const SingleActivator(LogicalKeyboardKey.keyS): () {
+            unawaited(showTrackSheet(context, _player));
+          },
+          const SingleActivator(LogicalKeyboardKey.keyA): _cycleAudio,
+          const SingleActivator(LogicalKeyboardKey.keyJ): _cycleSubtitle,
+          const SingleActivator(LogicalKeyboardKey.keyZ): _cycleAspect,
+          const SingleActivator(LogicalKeyboardKey.keyT): _toggleDeinterlace,
+          const SingleActivator(LogicalKeyboardKey.keyR): () {
+            unawaited(_toggleLocalRecording());
+          },
+          const SingleActivator(LogicalKeyboardKey.bracketLeft): () =>
+              _nudgeAudioDelay(-0.05),
+          const SingleActivator(LogicalKeyboardKey.bracketRight): () =>
+              _nudgeAudioDelay(0.05),
+          const SingleActivator(LogicalKeyboardKey.digit0): () => _digit(0),
+          const SingleActivator(LogicalKeyboardKey.digit1): () => _digit(1),
+          const SingleActivator(LogicalKeyboardKey.digit2): () => _digit(2),
+          const SingleActivator(LogicalKeyboardKey.digit3): () => _digit(3),
+          const SingleActivator(LogicalKeyboardKey.digit4): () => _digit(4),
+          const SingleActivator(LogicalKeyboardKey.digit5): () => _digit(5),
+          const SingleActivator(LogicalKeyboardKey.digit6): () => _digit(6),
+          const SingleActivator(LogicalKeyboardKey.digit7): () => _digit(7),
+          const SingleActivator(LogicalKeyboardKey.digit8): () => _digit(8),
+          const SingleActivator(LogicalKeyboardKey.digit9): () => _digit(9),
+          const SingleActivator(LogicalKeyboardKey.numpad0): () => _digit(0),
+          const SingleActivator(LogicalKeyboardKey.numpad1): () => _digit(1),
+          const SingleActivator(LogicalKeyboardKey.numpad2): () => _digit(2),
+          const SingleActivator(LogicalKeyboardKey.numpad3): () => _digit(3),
+          const SingleActivator(LogicalKeyboardKey.numpad4): () => _digit(4),
+          const SingleActivator(LogicalKeyboardKey.numpad5): () => _digit(5),
+          const SingleActivator(LogicalKeyboardKey.numpad6): () => _digit(6),
+          const SingleActivator(LogicalKeyboardKey.numpad7): () => _digit(7),
+          const SingleActivator(LogicalKeyboardKey.numpad8): () => _digit(8),
+          const SingleActivator(LogicalKeyboardKey.numpad9): () => _digit(9),
           const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
               _adjustVolume(5),
           const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
@@ -1327,7 +1551,10 @@ class _PlayerPageState extends State<PlayerPage> {
                   key: _videoKey,
                   controller: _controller,
                   controls: NoVideoControls,
-                  fit: BoxFit.contain,
+                  fit: _aspectMode == 4
+                      ? BoxFit.cover
+                      : (_aspectMode == 0 ? BoxFit.contain : BoxFit.fill),
+                  aspectRatio: _aspectRatios[_aspectMode],
                 ),
                 if (dim > 0)
                   IgnorePointer(
@@ -1391,6 +1618,22 @@ class _PlayerPageState extends State<PlayerPage> {
                       child: IgnorePointer(child: StbRecBadge()),
                     ),
                   ),
+                if (_browserOpen)
+                  StbChannelBrowser(
+                    channels: state.channels,
+                    favorites: state.favorites,
+                    groups: state.groups,
+                    initialGroup: state.groupFilter,
+                    current: _channel,
+                    now: state.now,
+                    nowFor: (channel) => state.epg.nowFor(channel, state.now),
+                    allowInsecure:
+                        state.activeSource?.allowInsecureCerts ?? false,
+                    onTune: _tuneFromBrowser,
+                    onGroupChanged: state.setGroupFilter,
+                    onClose: _closeBrowser,
+                  ),
+                if (_helpOpen) StbHelpOverlay(onClose: _toggleHelp),
                 if (_osdKind != null)
                   IgnorePointer(
                     child: _GestureOsd(
@@ -1516,10 +1759,13 @@ class _PlayerPageState extends State<PlayerPage> {
       );
     }
 
-    return IgnorePointer(
-      ignoring: !_controlsVisible,
+    final visible = _controlsVisible && !_browserOpen && !_helpOpen;
+    final compact = MediaQuery.sizeOf(context).width < 980;
+    return ExcludeFocus(
+      child: IgnorePointer(
+      ignoring: !visible,
       child: AnimatedOpacity(
-        opacity: _controlsVisible ? 1 : 0,
+        opacity: visible ? 1 : 0,
         duration: const Duration(milliseconds: 160),
         child: Stack(
           fit: StackFit.expand,
@@ -1695,8 +1941,18 @@ class _PlayerPageState extends State<PlayerPage> {
                                   unawaited(_toggleLocalRecording()),
                             ),
                           ],
+                          icon(Icons.list_rounded, strings.channelListTooltip,
+                              _openBrowser),
                           icon(Icons.subtitles_rounded, strings.audioAndSubtitles,
                               () => unawaited(showTrackSheet(context, _player))),
+                          if (!compact) ...<Widget>[
+                            icon(Icons.aspect_ratio_rounded, strings.aspectTooltip,
+                                _cycleAspect),
+                            icon(Icons.info_outline_rounded, strings.infoTooltip,
+                                _toggleInfo),
+                            icon(Icons.keyboard_alt_outlined, strings.helpTooltip,
+                                _toggleHelp),
+                          ],
                           icon(Icons.monitor_heart_outlined, strings.diagnostics,
                               () => unawaited(_showDiagnostics())),
                           icon(
@@ -1717,6 +1973,7 @@ class _PlayerPageState extends State<PlayerPage> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

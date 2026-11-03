@@ -7,6 +7,8 @@
 - Default audio language and default subtitle language (or subtitles off) in Settings.
 - Audio and subtitle choices are remembered per channel.
 - Local recordings carry the programme title when the guide knows it.
+- Desktop player: channel and tag browser over the picture (`C` / `Enter` / list button): tags across the top (All, Favourites, your Tvheadend tags), channels with what is on now, type to search by name or number, arrows / Enter / click to tune; the chosen tag is remembered.
+- Desktop shortcuts: number keys enter a channel number, `A`/`J` cycle audio and subtitles, `S` track menu, `Z` aspect ratio (16:9, 4:3, 21:9, zoom), `T` deinterlace, `[` `]` audio delay, `R` record, `H`/`F1` shortcut sheet; more buttons on the control bar.
 
 ## 0.1.3
 

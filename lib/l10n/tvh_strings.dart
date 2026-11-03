@@ -103,7 +103,6 @@ extension TvhStrings on AppStrings {
   String get adminOnly => isArabic
       ? 'هذه الشاشة للمسؤولين فقط.'
       : 'This screen is for admins only.';
-  String get version => isArabic ? 'الإصدار' : 'Version';
 
   // Local recording
   /// A readable reason for the server's stream error [text]
@@ -170,6 +169,85 @@ extension TvhStrings on AppStrings {
   String get muted => isArabic ? 'كتم الصوت' : 'Muted';
   String get audioLabel => isArabic ? 'الصوت' : 'Audio';
   String get subtitleLabel => isArabic ? 'الترجمة' : 'Subtitles';
+  String get stbChannels => isArabic ? 'القنوات' : 'Channels';
+  String get stbAll => isArabic ? 'الكل' : 'All';
+  String get stbFavorites => isArabic ? 'المفضلة' : 'Favourites';
+  String get stbSearch => isArabic ? 'اكتب للبحث بالاسم أو الرقم' : 'Type to search by name or number';
+  String get stbNoMatch => isArabic ? 'لا توجد قنوات مطابقة' : 'No matching channels';
+  String get stbBrowserHint => isArabic
+      ? '↑↓ اختيار · Enter مشاهدة · ←→ تغيير المجموعة · اكتب للبحث · Esc إغلاق'
+      : '↑↓ select · Enter watch · ←→ change tag · type to search · Esc close';
+  String get stbHelpTitle => isArabic ? 'اختصارات لوحة المفاتيح' : 'Keyboard shortcuts';
+  String get channelListTooltip => isArabic ? 'قائمة القنوات (C)' : 'Channel list (C)';
+  String get helpTooltip => isArabic ? 'الاختصارات (H)' : 'Shortcuts (H)';
+  String get infoTooltip => isArabic ? 'معلومات القناة (I)' : 'Channel info (I)';
+  String get aspectTooltip => isArabic ? 'نسبة العرض (Z)' : 'Aspect ratio (Z)';
+  String get channelWord => isArabic ? 'القناة' : 'Channel';
+  String noChannelNumber(String number) =>
+      isArabic ? 'لا توجد قناة برقم $number' : 'No channel $number';
+  String get aspectLabel => isArabic ? 'نسبة العرض' : 'Aspect ratio';
+  String aspectName(int mode) {
+    switch (mode) {
+      case 1:
+        return '16:9';
+      case 2:
+        return '4:3';
+      case 3:
+        return '21:9';
+      case 4:
+        return isArabic ? 'تكبير لملء الشاشة' : 'Zoom to fill';
+      default:
+        return isArabic ? 'تلقائي' : 'Auto';
+    }
+  }
+
+  String get deinterlaceLabel => isArabic ? 'إزالة التداخل' : 'Deinterlace';
+  String get onWord => isArabic ? 'تشغيل' : 'On';
+  String get offWord => isArabic ? 'إيقاف' : 'Off';
+  String get audioDelayLabel => isArabic ? 'تأخير الصوت' : 'Audio delay';
+  String get noOtherTracks => isArabic ? 'لا يوجد مسار آخر' : 'No other track';
+
+  /// Key / action pairs for the shortcuts sheet. Keys are space separated.
+  List<(String, String)> get shortcutHelp => isArabic
+      ? const <(String, String)>[
+          ('C Enter', 'قائمة القنوات والمجموعات'),
+          ('↑ ↓ PgUp PgDn', 'القناة التالية / السابقة'),
+          ('0-9', 'اكتب رقم القناة (ثم Enter)'),
+          ('← → + −', 'مستوى الصوت (وعجلة الفأرة)'),
+          ('M', 'كتم الصوت'),
+          ('Space', 'إيقاف مؤقت / تشغيل'),
+          ('F F11 Esc', 'ملء الشاشة / خروج'),
+          ('I', 'شريط معلومات القناة'),
+          ('S', 'قائمة الصوت والترجمة'),
+          ('A', 'المسار الصوتي التالي'),
+          ('J', 'الترجمة التالية'),
+          ('[ ]', 'تأخير الصوت −/+ 50ms'),
+          ('Z', 'تغيير نسبة العرض'),
+          ('T', 'إزالة التداخل'),
+          ('R', 'تسجيل على هذا الجهاز'),
+          ('D', 'التشخيص'),
+          ('H F1', 'هذه القائمة'),
+        ]
+      : const <(String, String)>[
+          ('C Enter', 'Channel list and tags'),
+          ('↑ ↓ PgUp PgDn', 'Next / previous channel'),
+          ('0-9', 'Type a channel number (then Enter)'),
+          ('← → + −', 'Volume (and the mouse wheel)'),
+          ('M', 'Mute'),
+          ('Space', 'Pause / play'),
+          ('F F11 Esc', 'Full screen / leave'),
+          ('I', 'Channel info banner'),
+          ('S', 'Audio & subtitles menu'),
+          ('A', 'Next audio track'),
+          ('J', 'Next subtitle'),
+          ('[ ]', 'Audio delay −/+ 50 ms'),
+          ('Z', 'Cycle aspect ratio'),
+          ('T', 'Deinterlace'),
+          ('R', 'Record on this device'),
+          ('D', 'Diagnostics'),
+          ('H F1', 'This sheet'),
+        ];
+
   String get streamInfo => isArabic ? 'معلومات البث' : 'Stream info';
   String get inAppRenderer => isArabic ? 'عرض الفيديو داخل التطبيق' : 'In-app video rendering';
   String get rendererAuto => isArabic ? 'تلقائي (GPU)' : 'Automatic (GPU)';
@@ -183,7 +261,6 @@ extension TvhStrings on AppStrings {
   String get subtitlesOff => isArabic ? 'بدون ترجمة' : 'Off';
   String get noTracks => isArabic ? 'لا توجد مسارات في هذا البث.' : 'This stream has none.';
   String trackNumber(int n) => isArabic ? 'مسار $n' : 'Track $n';
-  String get audioAndSubtitles => isArabic ? 'الصوت والترجمة' : 'Audio & subtitles';
   String get tracksHelp => isArabic
       ? 'تظهر الأسماء من لغة المسار في البث. ترجمة DVB تُعرض بينما ترجمة التلتكست غير مدعومة بعد.'
       : 'Names come from the language each track declares. DVB subtitles are shown; teletext subtitles are not supported yet.';

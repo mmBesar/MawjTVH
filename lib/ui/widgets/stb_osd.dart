@@ -23,6 +23,9 @@ BoxDecoration _panel(Color accent) => BoxDecoration(
       ],
     );
 
+/// The dark glass look shared by every set-top-box panel.
+BoxDecoration stbPanelDecoration(Color accent) => _panel(accent);
+
 /// Width of an OSD panel for the space it has.
 double _panelWidth(double available, double wanted) =>
     available <= 0 ? wanted : (available - 48).clamp(260.0, wanted).toDouble();
