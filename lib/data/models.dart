@@ -153,6 +153,16 @@ class Programme {
     this.dvrState,
     this.facts,
     this.credits,
+    this.badges = const <String>[],
+    this.genre,
+    this.firstAired,
+    this.season,
+    this.episodeNumber,
+    this.seasonCount,
+    this.episodeCount,
+    this.ageRating,
+    this.rating,
+    this.year,
   });
 
   final String channelId;
@@ -179,6 +189,23 @@ class Programme {
 
   /// One line of credits: directors, cast.
   final String? credits;
+
+  /// Short flags from the guide: `NEW`, `REPEAT`, `PREMIERE`, `HD`, `16:9`,
+  /// `CC`, `AD` (audio description), `SIGNED`.
+  final List<String> badges;
+
+  /// Broadcast genre when the guide only gives a content code.
+  final String? genre;
+  final DateTime? firstAired;
+  final int? season;
+  final int? episodeNumber;
+  final int? seasonCount;
+  final int? episodeCount;
+  final int? ageRating;
+
+  /// Star rating on a 0-10 scale.
+  final double? rating;
+  final int? year;
 
   /// Title with the episode label, e.g. `Foo · S01E05`, for lists.
   String get displayTitle =>
@@ -316,6 +343,11 @@ class AppSettings {
     this.preferredSubtitleLang = 'off',
     this.rememberTracks = true,
     this.zapBanner = true,
+    this.osdSeconds = 8,
+    this.uiScale = 0,
+    this.channelView = 'cards',
+    this.pipOnLeave = true,
+    this.guideScale = 0,
   });
 
   factory AppSettings.defaults() => const AppSettings(
@@ -385,6 +417,21 @@ class AppSettings {
   /// Desktop: show the channel banner when a channel opens.
   final bool zapBanner;
 
+  /// Seconds an on-screen display stays before it goes away (unless pinned).
+  final int osdSeconds;
+
+  /// Whole-interface zoom; 0 picks one for the screen (bigger on desktop).
+  final double uiScale;
+
+  /// How the channel page lists channels: cards, grid, compact, posters.
+  final String channelView;
+
+  /// Android: float the video in a small window when leaving the app.
+  final bool pipOnLeave;
+
+  /// Extra zoom for the Guide only; 0 picks one for the screen.
+  final double guideScale;
+
   AppSettings copyWith({
     ThemeFamily? themeFamily,
     ThemeAccent? accent,
@@ -408,6 +455,11 @@ class AppSettings {
     String? preferredSubtitleLang,
     bool? rememberTracks,
     bool? zapBanner,
+    int? osdSeconds,
+    double? uiScale,
+    String? channelView,
+    bool? pipOnLeave,
+    double? guideScale,
   }) {
     return AppSettings(
       themeFamily: themeFamily ?? this.themeFamily,
@@ -435,6 +487,11 @@ class AppSettings {
           preferredSubtitleLang ?? this.preferredSubtitleLang,
       rememberTracks: rememberTracks ?? this.rememberTracks,
       zapBanner: zapBanner ?? this.zapBanner,
+      osdSeconds: osdSeconds ?? this.osdSeconds,
+      uiScale: uiScale ?? this.uiScale,
+      channelView: channelView ?? this.channelView,
+      pipOnLeave: pipOnLeave ?? this.pipOnLeave,
+      guideScale: guideScale ?? this.guideScale,
     );
   }
 
@@ -461,6 +518,11 @@ class AppSettings {
         'preferredSubtitleLang': preferredSubtitleLang,
         'rememberTracks': rememberTracks,
         'zapBanner': zapBanner,
+        'osdSeconds': osdSeconds,
+        'uiScale': uiScale,
+        'channelView': channelView,
+        'pipOnLeave': pipOnLeave,
+        'guideScale': guideScale,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -499,6 +561,11 @@ class AppSettings {
       preferredSubtitleLang: json['preferredSubtitleLang'] as String? ?? 'off',
       rememberTracks: json['rememberTracks'] as bool? ?? true,
       zapBanner: json['zapBanner'] as bool? ?? true,
+      osdSeconds: json['osdSeconds'] as int? ?? 8,
+      uiScale: (json['uiScale'] as num?)?.toDouble() ?? 0,
+      channelView: json['channelView'] as String? ?? 'cards',
+      pipOnLeave: json['pipOnLeave'] as bool? ?? true,
+      guideScale: (json['guideScale'] as num?)?.toDouble() ?? 0,
     );
   }
 }

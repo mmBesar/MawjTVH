@@ -9,6 +9,7 @@ import '../../core/bidi.dart';
 import '../../core/catppuccin.dart';
 import '../../core/platform.dart';
 import '../../core/theme.dart';
+import '../../core/ui_zoom.dart';
 import '../../data/app_state.dart';
 import '../../data/local_recorder.dart';
 import '../../data/models.dart';
@@ -99,6 +100,92 @@ class SettingsPage extends StatelessWidget {
                           ),
                       ],
                     ),
+                  ],
+                ),
+                _Section(
+                  title: strings.displaySection,
+                  children: <Widget>[
+                    _dropdown<double>(
+                      icon: Icons.zoom_in_rounded,
+                      label: strings.uiScaleLabel,
+                      value: <double>[0, ...kUiScaleSteps].contains(settings.uiScale)
+                          ? settings.uiScale
+                          : 0,
+                      options: <(double, String)>[
+                        (0.0, strings.autoWord),
+                        for (final step in kUiScaleSteps)
+                          (step, '${(step * 100).round()}%'),
+                      ],
+                      onChanged: (value) => unawaited(state.setUiScale(value)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6, bottom: 12),
+                      child: Text(
+                        strings.uiScaleHelp,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colors.subtext0,
+                            ),
+                      ),
+                    ),
+                    _dropdown<double>(
+                      icon: Icons.calendar_view_week_rounded,
+                      label: strings.guideSizeLabel,
+                      value: _guideSteps.contains(settings.guideScale)
+                          ? settings.guideScale
+                          : 0,
+                      options: <(double, String)>[
+                        (0.0, strings.autoWord),
+                        for (final step in _guideSteps.where((v) => v > 0))
+                          (step, '${(step * 100).round()}%'),
+                      ],
+                      onChanged: (value) =>
+                          unawaited(state.setGuideScale(value)),
+                    ),
+                    const SizedBox(height: 12),
+                    _dropdown<String>(
+                      icon: Icons.dashboard_customize_rounded,
+                      label: strings.viewMode,
+                      value: <String>['cards', 'list', 'compact', 'wall']
+                              .contains(settings.channelView)
+                          ? settings.channelView
+                          : 'cards',
+                      options: <(String, String)>[
+                        ('cards', strings.viewCards),
+                        ('list', strings.viewList),
+                        ('compact', strings.viewCompact),
+                        ('wall', strings.viewWall),
+                      ],
+                      onChanged: (value) =>
+                          unawaited(state.setChannelView(value)),
+                    ),
+                    const SizedBox(height: 12),
+                    _dropdown<int>(
+                      icon: Icons.timer_outlined,
+                      label: strings.osdSecondsLabel,
+                      value: <int>[4, 6, 8, 12, 20, 30].contains(settings.osdSeconds)
+                          ? settings.osdSeconds
+                          : 8,
+                      options: <(int, String)>[
+                        for (final seconds in <int>[4, 6, 8, 12, 20, 30])
+                          (seconds, strings.secondsShort(seconds)),
+                      ],
+                      onChanged: (value) =>
+                          unawaited(state.setOsdSeconds(value)),
+                    ),
+                    if (defaultTargetPlatform == TargetPlatform.android)
+                      SwitchListTile(
+                        value: settings.pipOnLeave,
+                        onChanged: (value) =>
+                            unawaited(state.setPipOnLeave(value)),
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(strings.pipLabel),
+                        subtitle: Text(
+                          strings.pipHelp,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: colors.subtext0,
+                              ),
+                        ),
+                      ),
                   ],
                 ),
                 _Section(
@@ -1127,3 +1214,36 @@ const List<String> _langOptions = <String>[
   'jpn',
   'kor',
 ];
+
+const List<double> _guideSteps = <double>[0, 1.0, 1.15, 1.3, 1.5, 1.75];
+
+Widget _dropdown<T>({
+  required IconData icon,
+  required String label,
+  required T value,
+  required List<(T, String)> options,
+  required void Function(T value) onChanged,
+}) {
+  return InputDecorator(
+    decoration: InputDecoration(
+      prefixIcon: Icon(icon),
+      labelText: label,
+    ),
+    child: DropdownButtonHideUnderline(
+      child: DropdownButton<T>(
+        value: value,
+        isExpanded: true,
+        isDense: true,
+        items: <DropdownMenuItem<T>>[
+          for (final option in options)
+            DropdownMenuItem<T>(value: option.$1, child: Text(option.$2)),
+        ],
+        onChanged: (next) {
+          if (next != null) {
+            onChanged(next);
+          }
+        },
+      ),
+    ),
+  );
+}

@@ -217,7 +217,9 @@ extension TvhStrings on AppStrings {
           ('M', 'كتم الصوت'),
           ('Space', 'إيقاف مؤقت / تشغيل'),
           ('F F11 Esc', 'ملء الشاشة / خروج'),
-          ('I', 'شريط معلومات القناة'),
+          ('I', 'شريط معلومات القناة (يختفي بعد قليل)'),
+          ('P', 'تثبيت الشريط على الشاشة'),
+          ('G', 'دليل القناة (البرامج القادمة والتسجيل)'),
           ('S', 'قائمة الصوت والترجمة'),
           ('A', 'المسار الصوتي التالي'),
           ('J', 'الترجمة التالية'),
@@ -226,6 +228,7 @@ extension TvhStrings on AppStrings {
           ('T', 'إزالة التداخل'),
           ('R', 'تسجيل على هذا الجهاز'),
           ('D', 'التشخيص'),
+          ('Ctrl + − 0', 'تكبير وتصغير الواجهة'),
           ('H F1', 'هذه القائمة'),
         ]
       : const <(String, String)>[
@@ -236,7 +239,10 @@ extension TvhStrings on AppStrings {
           ('M', 'Mute'),
           ('Space', 'Pause / play'),
           ('F F11 Esc', 'Full screen / leave'),
-          ('I', 'Channel info banner'),
+          ('I', 'Channel info banner (hides after a few seconds)'),
+          ('P', 'Pin the banner on screen'),
+          ('G', 'Channel guide: what is next, record'),
+          ('Ctrl + − 0', 'Interface zoom'),
           ('S', 'Audio & subtitles menu'),
           ('A', 'Next audio track'),
           ('J', 'Next subtitle'),
@@ -248,6 +254,42 @@ extension TvhStrings on AppStrings {
           ('H F1', 'This sheet'),
         ];
 
+  String seasonOf(int n, int total) =>
+      isArabic ? 'الموسم $n من $total' : 'Season $n of $total';
+  String seasonN(int n) => isArabic ? 'الموسم $n' : 'Season $n';
+  String episodeOf(int n, int total) =>
+      isArabic ? 'الحلقة $n من $total' : 'Episode $n of $total';
+  String episodeN(int n) => isArabic ? 'الحلقة $n' : 'Episode $n';
+  String firstAiredOn(String date) =>
+      isArabic ? 'عُرض أول مرة $date' : 'First aired $date';
+  String get stbEpg => isArabic ? 'دليل القناة' : 'Channel guide';
+  String get stbEpgHint => isArabic
+      ? '↑↓ اختيار · Enter تسجيل · Esc إغلاق'
+      : '↑↓ select · Enter record · Esc close';
+  String get pinOsd => isArabic ? 'تثبيت (P)' : 'Pin (P)';
+  String get unpinOsd => isArabic ? 'إلغاء التثبيت (P)' : 'Unpin (P)';
+  String get viewMode => isArabic ? 'طريقة العرض' : 'View';
+  String get viewCards => isArabic ? 'بطاقات' : 'Cards';
+  String get viewList => isArabic ? 'قائمة' : 'List';
+  String get viewCompact => isArabic ? 'مضغوط' : 'Compact';
+  String get viewWall => isArabic ? 'جدار الشعارات' : 'Logo wall';
+  String get displaySection => isArabic ? 'العرض والحجم' : 'Display & size';
+  String get autoWord => isArabic ? 'تلقائي' : 'Auto';
+  String get uiScaleLabel => isArabic ? 'حجم الواجهة' : 'Interface size';
+  String get uiScaleHelp => isArabic
+      ? 'يكبّر النصوص والأيقونات في كل مكان. على سطح المكتب: Ctrl ‎+‎ و Ctrl ‎−‎ و Ctrl 0.'
+      : 'Makes text and icons bigger everywhere. On desktop: Ctrl + and Ctrl − to change, Ctrl 0 for automatic.';
+  String get guideSizeLabel => isArabic ? 'حجم الدليل' : 'Guide size';
+  String get osdSecondsLabel =>
+      isArabic ? 'مدة بقاء الشريط على الشاشة' : 'On-screen display time';
+  String secondsShort(int n) => isArabic ? '$n ثانية' : '$n s';
+  String get pipLabel => isArabic ? 'نافذة عائمة عند الخروج' : 'Floating window on leave';
+  String get pipHelp => isArabic
+      ? 'عند الخروج من التطبيق أثناء المشاهدة يستمر الفيديو في نافذة صغيرة عائمة.'
+      : 'Leaving the app while watching keeps the video in a small floating window.';
+  String get pipButton => isArabic ? 'نافذة عائمة' : 'Floating window';
+  String get noGuide => isArabic ? 'لا توجد بيانات دليل لهذه القناة' : 'No guide data for this channel';
+  String get minutesShort => isArabic ? 'د' : 'min';
   String get streamInfo => isArabic ? 'معلومات البث' : 'Stream info';
   String get inAppRenderer => isArabic ? 'عرض الفيديو داخل التطبيق' : 'In-app video rendering';
   String get rendererAuto => isArabic ? 'تلقائي (GPU)' : 'Automatic (GPU)';

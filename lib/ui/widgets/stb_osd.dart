@@ -160,23 +160,23 @@ class StbMessageOsd extends StatelessWidget {
     final colors = context.mawjColors;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = _panelWidth(constraints.maxWidth, 560);
+        final width = _panelWidth(constraints.maxWidth, 680);
         return Align(
           alignment: const Alignment(0, 0.66),
           child: Container(
             width: width,
-            padding: const EdgeInsets.fromLTRB(22, 18, 24, 18),
+            padding: const EdgeInsets.fromLTRB(26, 22, 28, 22),
             decoration: _panel(colors.accent),
             child: Row(
               children: <Widget>[
                 Container(
-                  width: 52,
-                  height: 52,
+                  width: 64,
+                  height: 64,
                   decoration: BoxDecoration(
                     color: colors.accent,
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Icon(icon, color: const Color(0xFF0A111E), size: 28),
+                  child: Icon(icon, color: const Color(0xFF0A111E), size: 36),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -190,7 +190,7 @@ class StbMessageOsd extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 22,
+                          fontSize: 30,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -203,7 +203,7 @@ class StbMessageOsd extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.7),
-                              fontSize: 15,
+                              fontSize: 20,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -229,6 +229,10 @@ class StbBannerData {
     required this.clock,
     required this.nowLabel,
     required this.nextLabel,
+    required this.pinned,
+    required this.pinTooltip,
+    required this.onPin,
+    required this.onClose,
     this.nowTitle,
     this.nowRange,
     this.progress,
@@ -238,6 +242,7 @@ class StbBannerData {
     this.chips = const <String>[],
     this.signal,
     this.recording = false,
+    this.bottomInset = 96,
   });
 
   final Widget logo;
@@ -246,6 +251,10 @@ class StbBannerData {
   final String clock;
   final String nowLabel;
   final String nextLabel;
+  final bool pinned;
+  final String pinTooltip;
+  final VoidCallback onPin;
+  final VoidCallback onClose;
   final String? nowTitle;
   final String? nowRange;
   final double? progress;
@@ -259,10 +268,14 @@ class StbBannerData {
   /// A signal meter, when the account can see tuner status.
   final Widget? signal;
   final bool recording;
+
+  /// Space kept free under the banner (the control bar).
+  final double bottomInset;
 }
 
 /// The lower-third channel banner: logo, name, now and next with progress,
-/// stream details and signal.
+/// stream details and signal. It is as wide as the window allows and its type
+/// scales down with the window, so it stays readable and never overflows.
 class StbBanner extends StatelessWidget {
   const StbBanner({super.key, required this.data});
 
@@ -273,21 +286,28 @@ class StbBanner extends StatelessWidget {
     final colors = context.mawjColors;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = _panelWidth(constraints.maxWidth, 1120);
-        final wide = width >= 820;
+        final available = constraints.maxWidth;
+        final width = available <= 0
+            ? 1200.0
+            : (available * 0.96).clamp(280.0, 1560.0).toDouble();
+        // 1.0 at 1500 logical pixels wide; smaller windows shrink the type.
+        final k = (width / 1500).clamp(0.62, 1.1).toDouble();
+        double f(double value) => value * k;
+        final wide = width >= 860;
+
         final details = Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Wrap(
-              spacing: 6,
-              runSpacing: 6,
+              spacing: f(8),
+              runSpacing: f(8),
               children: <Widget>[
-                for (final chip in data.chips) _Chip(text: chip),
+                for (final chip in data.chips) _Chip(text: chip, scale: k),
               ],
             ),
             if (data.signal != null) ...<Widget>[
-              const SizedBox(height: 12),
+              SizedBox(height: f(16)),
               data.signal!,
             ],
           ],
@@ -301,19 +321,24 @@ class StbBanner extends StatelessWidget {
               children: <Widget>[
                 if (data.number.isNotEmpty)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                    margin: const EdgeInsetsDirectional.only(end: 10),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: f(12),
+                      vertical: f(4),
+                    ),
+                    margin: const EdgeInsetsDirectional.only(end: 12),
                     decoration: BoxDecoration(
                       color: colors.accent,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(f(10)),
                     ),
                     child: Text(
                       data.number,
-                      style: const TextStyle(
-                        color: Color(0xFF0A111E),
-                        fontSize: 16,
+                      style: TextStyle(
+                        color: const Color(0xFF0A111E),
+                        fontSize: f(24),
                         fontWeight: FontWeight.w800,
-                        fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
+                        fontFeatures: const <FontFeature>[
+                          FontFeature.tabularFigures(),
+                        ],
                       ),
                     ),
                   ),
@@ -322,74 +347,75 @@ class StbBanner extends StatelessWidget {
                     data.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
-                      fontSize: 24,
+                      fontSize: f(34),
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
                 if (data.recording)
-                  const Padding(
-                    padding: EdgeInsetsDirectional.only(end: 12),
-                    child: _RecDot(),
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(end: 14),
+                    child: _RecDot(scale: k),
                   ),
                 Text(
                   data.clock,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    fontSize: 20,
+                    color: Colors.white.withValues(alpha: 0.88),
+                    fontSize: f(28),
                     fontWeight: FontWeight.w600,
                     fontFeatures: const <FontFeature>[
                       FontFeature.tabularFigures(),
                     ],
                   ),
                 ),
+                SizedBox(width: f(6)),
               ],
             ),
             if (data.nowTitle != null) ...<Widget>[
-              const SizedBox(height: 14),
+              SizedBox(height: f(16)),
               Row(
                 children: <Widget>[
                   Text(
                     data.nowLabel.toUpperCase(),
                     style: TextStyle(
                       color: colors.accent,
-                      fontSize: 12,
+                      fontSize: f(16),
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 1.4,
+                      letterSpacing: 1.6,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   if (data.nowRange != null)
                     Text(
                       data.nowRange!,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        fontSize: 13,
+                        color: Colors.white.withValues(alpha: 0.68),
+                        fontSize: f(18),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                 ],
               ),
-              const SizedBox(height: 3),
+              SizedBox(height: f(4)),
               BidiText(
                 data.nowTitle!,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white,
-                  fontSize: 19,
+                  fontSize: f(30),
                   fontWeight: FontWeight.w700,
                 ),
               ),
               if (data.progress != null) ...<Widget>[
-                const SizedBox(height: 8),
+                SizedBox(height: f(10)),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(99),
                   child: LinearProgressIndicator(
                     value: data.progress!.clamp(0.0, 1.0).toDouble(),
-                    minHeight: 5,
+                    minHeight: f(7),
                     backgroundColor: Colors.white.withValues(alpha: 0.16),
                     color: colors.accent,
                   ),
@@ -397,51 +423,51 @@ class StbBanner extends StatelessWidget {
               ],
               if (wide && (data.nowDescription ?? '').isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(top: 8),
+                  padding: EdgeInsets.only(top: f(10)),
                   child: BidiText(
                     data.nowDescription!,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.65),
-                      fontSize: 13,
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: f(19),
                       height: 1.35,
                     ),
                   ),
                 ),
             ],
             if (data.nextTitle != null) ...<Widget>[
-              const SizedBox(height: 12),
+              SizedBox(height: f(14)),
               Row(
                 children: <Widget>[
                   Text(
                     data.nextLabel.toUpperCase(),
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.5),
-                      fontSize: 12,
+                      color: Colors.white.withValues(alpha: 0.55),
+                      fontSize: f(16),
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 1.4,
+                      letterSpacing: 1.6,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   if (data.nextRange != null)
                     Text(
                       data.nextRange!,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        fontSize: 13,
+                        color: Colors.white.withValues(alpha: 0.55),
+                        fontSize: f(17),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: BidiText(
                       data.nextTitle!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.78),
-                        fontSize: 15,
+                        color: Colors.white.withValues(alpha: 0.82),
+                        fontSize: f(21),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -450,35 +476,77 @@ class StbBanner extends StatelessWidget {
               ),
             ],
             if (!wide) ...<Widget>[
-              const SizedBox(height: 12),
+              SizedBox(height: f(14)),
               details,
             ],
           ],
+        );
+
+        final body = Padding(
+          padding: EdgeInsets.fromLTRB(f(26), f(24), f(26), f(24)),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              SizedBox(
+                width: f(128),
+                height: f(128),
+                child: FittedBox(fit: BoxFit.contain, child: data.logo),
+              ),
+              SizedBox(width: f(26)),
+              Expanded(child: main),
+              if (wide) ...<Widget>[
+                SizedBox(width: f(26)),
+                Container(
+                  width: 1,
+                  height: f(150),
+                  color: Colors.white.withValues(alpha: 0.12),
+                ),
+                SizedBox(width: f(26)),
+                SizedBox(width: f(300), child: details),
+              ],
+            ],
+          ),
         );
 
         return Align(
           alignment: Alignment.bottomCenter,
           child: Container(
             width: width,
-            margin: const EdgeInsets.only(bottom: 96),
-            padding: const EdgeInsets.all(20),
+            margin: EdgeInsets.only(bottom: data.bottomInset),
             decoration: _panel(colors.accent),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+            child: Stack(
               children: <Widget>[
-                data.logo,
-                const SizedBox(width: 20),
-                Expanded(child: main),
-                if (wide) ...<Widget>[
-                  const SizedBox(width: 20),
-                  Container(
-                    width: 1,
-                    height: 120,
-                    color: Colors.white.withValues(alpha: 0.12),
+                body,
+                PositionedDirectional(
+                  top: 4,
+                  end: 4,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      IconButton(
+                        tooltip: data.pinTooltip,
+                        onPressed: data.onPin,
+                        iconSize: f(26).clamp(18.0, 30.0).toDouble(),
+                        icon: Icon(
+                          data.pinned
+                              ? Icons.push_pin_rounded
+                              : Icons.push_pin_outlined,
+                          color: data.pinned
+                              ? colors.accent
+                              : Colors.white.withValues(alpha: 0.7),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: data.onClose,
+                        iconSize: f(26).clamp(18.0, 30.0).toDouble(),
+                        icon: Icon(
+                          Icons.close_rounded,
+                          color: Colors.white.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 20),
-                  SizedBox(width: 230, child: details),
-                ],
+                ),
               ],
             ),
           ),
@@ -489,24 +557,25 @@ class StbBanner extends StatelessWidget {
 }
 
 class _Chip extends StatelessWidget {
-  const _Chip({required this.text});
+  const _Chip({required this.text, this.scale = 1});
 
   final String text;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 6 * scale),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.09),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10 * scale),
         border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
       ),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           color: Colors.white,
-          fontSize: 12,
+          fontSize: 17 * scale,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -515,7 +584,9 @@ class _Chip extends StatelessWidget {
 }
 
 class _RecDot extends StatelessWidget {
-  const _RecDot();
+  const _RecDot({this.scale = 1});
+
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
@@ -523,19 +594,19 @@ class _RecDot extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         Container(
-          width: 10,
-          height: 10,
+          width: 12 * scale,
+          height: 12 * scale,
           decoration: const BoxDecoration(
             color: Color(0xFFE5484D),
             shape: BoxShape.circle,
           ),
         ),
         const SizedBox(width: 6),
-        const Text(
+        Text(
           'REC',
           style: TextStyle(
-            color: Color(0xFFE5484D),
-            fontSize: 13,
+            color: const Color(0xFFE5484D),
+            fontSize: 17 * scale,
             fontWeight: FontWeight.w800,
             letterSpacing: 1.2,
           ),

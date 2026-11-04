@@ -312,6 +312,21 @@ class HtspBackend {
         if (event['subtitled'] == 1) 'CC',
       ].join(' · ');
       final credits = _creditsLine(event['credits']);
+      final genre = _genreName(_int(event['contentType']));
+      if (categories.isEmpty && genre != null) {
+        categories.add(genre);
+      }
+      final firstAired = _int(event['firstAired']);
+      final badges = <String>[
+        if (_flag(event, const <String>['new'])) 'NEW',
+        if (_flag(event, const <String>['repeat'])) 'REPEAT',
+        if (_flag(event, const <String>['premiere'])) 'PREMIERE',
+        if (_flag(event, const <String>['hd'])) 'HD',
+        if (_flag(event, const <String>['widescreen'])) '16:9',
+        if (_flag(event, const <String>['subtitled'])) 'CC',
+        if (_flag(event, const <String>['audiodesc', 'audioDesc'])) 'AD',
+        if (_flag(event, const <String>['deafsigned', 'deafSigned'])) 'SIGNED',
+      ];
       (byChannel['$channelId'] ??= <Programme>[]).add(
         Programme(
           channelId: '$channelId',
@@ -336,6 +351,18 @@ class HtspBackend {
           dvrState: dvr == null ? null : _string(dvr['state']),
           facts: facts.isEmpty ? null : facts,
           credits: credits,
+          badges: badges,
+          genre: genre,
+          firstAired: firstAired == null || firstAired <= 0
+              ? null
+              : DateTime.fromMillisecondsSinceEpoch(firstAired * 1000),
+          season: season != null && season > 0 ? season : null,
+          episodeNumber: episode != null && episode > 0 ? episode : null,
+          seasonCount: _positive(_int(event['seasonCount'])),
+          episodeCount: _positive(_int(event['episodeCount'])),
+          ageRating: age != null && age > 0 ? age : null,
+          rating: stars != null && stars > 0 ? stars / 10 : null,
+          year: year != null && year > 0 ? year : null,
         ),
       );
     }
@@ -643,6 +670,49 @@ bool looksLikeRadioTag(String name) {
 }
 
 /// `credits` is a map of name to role; group the names by role.
+bool _flag(Map<String, Object?> event, List<String> names) {
+  for (final name in names) {
+    final value = event[name];
+    if (value == 1 || value == true) {
+      return true;
+    }
+  }
+  return false;
+}
+
+int? _positive(int? value) => value != null && value > 0 ? value : null;
+
+/// The broad genre of a DVB content code (its high nibble).
+String? _genreName(int? contentType) {
+  if (contentType == null || contentType <= 0) {
+    return null;
+  }
+  switch (contentType >> 4) {
+    case 0x1:
+      return 'Movie / Drama';
+    case 0x2:
+      return 'News / Current affairs';
+    case 0x3:
+      return 'Show / Game show';
+    case 0x4:
+      return 'Sports';
+    case 0x5:
+      return "Children's / Youth";
+    case 0x6:
+      return 'Music / Dance';
+    case 0x7:
+      return 'Arts / Culture';
+    case 0x8:
+      return 'Social / Politics';
+    case 0x9:
+      return 'Education / Science';
+    case 0xA:
+      return 'Leisure / Hobbies';
+    default:
+      return null;
+  }
+}
+
 String? _creditsLine(Object? raw) {
   if (raw is! Map || raw.isEmpty) {
     return null;

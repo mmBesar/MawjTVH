@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.5
+
+- Aspect ratio fixed: it now reshapes the normally fitted picture, `Auto` always returns to the original, and Zoom fills the window without stretching.
+- Channel banner: wider (up to 96% of the window), much bigger type that scales with the window, pin and close buttons, `P` pins it from the keyboard, a click anywhere else dismisses it, and it goes away by itself after the time set in Settings. Bigger notices too.
+- Channel guide panel over the picture (`G`, or the guide button on mobile): what is on and next, details of the highlighted programme, record and record series.
+- More from the server guide over HTSP: new / repeat / premiere / HD / widescreen / subtitled / audio description flags, genre, season and episode counts, first aired date, rating and age.
+- Mobile player: channel list with tags and search (bottom sheet), channel guide, and a floating (picture-in-picture) window, also automatically when leaving the app (Settings).
+- Interface zoom for the whole app (desktop defaults to 120%, Ctrl + / Ctrl − / Ctrl 0) plus a separate Guide size.
+- Channel page views: Cards, List, Compact and Logo wall (header menu and Settings).
+- Settings: on-screen display time, interface size, guide size, view, floating window.
+
 ## 0.1.4
 
 - Channels no longer vanish from the list during a session: server updates that carry only part of a channel (or programme, or recording) are merged instead of replacing it.

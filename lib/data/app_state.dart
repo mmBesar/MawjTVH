@@ -576,6 +576,21 @@ class AppState extends ChangeNotifier {
   Future<void> setRememberTracks(bool value) =>
       updateSettings(_settings.copyWith(rememberTracks: value));
 
+  Future<void> setOsdSeconds(int value) =>
+      updateSettings(_settings.copyWith(osdSeconds: value));
+
+  Future<void> setUiScale(double value) =>
+      updateSettings(_settings.copyWith(uiScale: value));
+
+  Future<void> setChannelView(String value) =>
+      updateSettings(_settings.copyWith(channelView: value));
+
+  Future<void> setGuideScale(double value) =>
+      updateSettings(_settings.copyWith(guideScale: value));
+
+  Future<void> setPipOnLeave(bool value) =>
+      updateSettings(_settings.copyWith(pipOnLeave: value));
+
   Future<void> setZapBanner(bool value) =>
       updateSettings(_settings.copyWith(zapBanner: value));
 

@@ -14,6 +14,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../core/app_info.dart';
 import '../core/bidi.dart';
 import '../core/network_image.dart';
+import '../core/pip.dart';
 import '../core/platform.dart';
 import '../core/theme.dart';
 import '../data/app_state.dart';
@@ -25,9 +26,11 @@ import '../l10n/strings.dart';
 import '../l10n/tvh_strings.dart';
 import 'desktop_player_page.dart';
 import 'widgets/channel_logo.dart';
+import 'widgets/record_actions.dart';
 import 'widgets/record_now_button.dart';
 import 'widgets/signal_badge.dart';
 import 'widgets/stb_browser.dart';
+import 'widgets/stb_epg.dart';
 import 'widgets/stb_osd.dart';
 import 'widgets/track_sheet.dart';
 import 'widgets/wave.dart';
@@ -181,6 +184,7 @@ class _PlayerPageState extends State<PlayerPage> {
   String? _osdSubtitle;
   bool _browserOpen = false;
   bool _helpOpen = false;
+  bool _epgOpen = false;
   int _aspectMode = 0;
   bool _deinterlace = false;
   double _audioDelay = 0;
@@ -204,6 +208,9 @@ class _PlayerPageState extends State<PlayerPage> {
     super.initState();
     _channel = widget.channel;
     _appState = context.read<AppState>();
+    PipService.init();
+    unawaited(PipService.autoEnter(_appState.settings.pipOnLeave));
+    PipService.active.addListener(_onPip);
     _gpu = _gpuRenderer(_appState.settings.inAppRenderer);
     _player = Player(
       configuration: PlayerConfiguration(
@@ -509,6 +516,15 @@ class _PlayerPageState extends State<PlayerPage> {
       _closeBrowser();
       return;
     }
+    if (_epgOpen) {
+      _closeEpg();
+      return;
+    }
+    if (_infoVisible && !_infoPinned) {
+      // A click away from the banner dismisses it (unless it is pinned).
+      _setInfo(false);
+      return;
+    }
     if (_controlsVisible) {
       _hideTimer?.cancel();
       setState(() => _controlsVisible = false);
@@ -727,6 +743,7 @@ class _PlayerPageState extends State<PlayerPage> {
     setState(() {
       _browserOpen = true;
       _helpOpen = false;
+      _epgOpen = false;
     });
   }
 
@@ -744,10 +761,45 @@ class _PlayerPageState extends State<PlayerPage> {
     _switchTo(channel);
   }
 
+  void _openEpg() {
+    if (_epgOpen) {
+      _closeEpg();
+      return;
+    }
+    _hideTimer?.cancel();
+    setState(() {
+      _epgOpen = true;
+      _browserOpen = false;
+      _helpOpen = false;
+    });
+  }
+
+  void _closeEpg() {
+    if (!_epgOpen) {
+      return;
+    }
+    setState(() => _epgOpen = false);
+    _focusNode.requestFocus();
+    _scheduleHide();
+  }
+
+  void _recordFromEpg(Programme programme, {bool series = false}) {
+    final strings = context.strings;
+    unawaited(
+      runServerAction(
+        context,
+        action: () => _appState.recordProgramme(programme, series: series),
+        success: strings.recordingScheduled,
+        forbidden: strings.recordingsForbidden,
+      ),
+    );
+  }
+
   void _toggleHelp() {
     setState(() {
       _helpOpen = !_helpOpen;
       _browserOpen = false;
+      _epgOpen = false;
     });
     if (!_helpOpen) {
       _focusNode.requestFocus();
@@ -761,6 +813,62 @@ class _PlayerPageState extends State<PlayerPage> {
     21 / 9,
     null,
   ];
+
+  /// The picture, reshaped for the chosen aspect ratio. `Auto` leaves it
+  /// untouched; the others stretch the normally fitted picture to the shape.
+  Widget _videoWithAspect(Size viewport) {
+    final video = Video(
+      key: _videoKey,
+      controller: _controller,
+      controls: NoVideoControls,
+      fit: BoxFit.contain,
+    );
+    final params = _videoParams;
+    final width = (params?.dw ?? params?.w ?? 0).toDouble();
+    final height = (params?.dh ?? params?.h ?? 0).toDouble();
+    if (_aspectMode == 0 ||
+        width <= 0 ||
+        height <= 0 ||
+        viewport.width <= 0 ||
+        viewport.height <= 0) {
+      return video;
+    }
+    final native = width / height;
+    // Size of the picture as BoxFit.contain draws it now.
+    final double drawnWidth;
+    final double drawnHeight;
+    if (viewport.width / viewport.height > native) {
+      drawnHeight = viewport.height;
+      drawnWidth = viewport.height * native;
+    } else {
+      drawnWidth = viewport.width;
+      drawnHeight = viewport.width / native;
+    }
+    double scaleX;
+    double scaleY;
+    if (_aspectMode == 4) {
+      scaleX = scaleY = math.max(
+        viewport.width / drawnWidth,
+        viewport.height / drawnHeight,
+      );
+    } else {
+      final target = _aspectRatios[_aspectMode]!;
+      final double wantedWidth;
+      final double wantedHeight;
+      if (viewport.width / viewport.height > target) {
+        wantedHeight = viewport.height;
+        wantedWidth = viewport.height * target;
+      } else {
+        wantedWidth = viewport.width;
+        wantedHeight = viewport.width / target;
+      }
+      scaleX = wantedWidth / drawnWidth;
+      scaleY = wantedHeight / drawnHeight;
+    }
+    return ClipRect(
+      child: Transform.scale(scaleX: scaleX, scaleY: scaleY, child: video),
+    );
+  }
 
   void _cycleAspect() {
     final next = (_aspectMode + 1) % _aspectRatios.length;
@@ -1016,6 +1124,15 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _infoPinned = false;
   Timer? _bannerTimer;
 
+  Duration get _osdTime =>
+      Duration(seconds: _appState.settings.osdSeconds.clamp(2, 120).toInt());
+
+  void _onPip() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   void _setInfo(bool visible) {
     _infoTimer?.cancel();
     _bannerTimer?.cancel();
@@ -1029,31 +1146,46 @@ class _PlayerPageState extends State<PlayerPage> {
         const Duration(seconds: 1),
         (_) => unawaited(_refreshInfo()),
       );
+      if (!_infoPinned) {
+        _bannerTimer = Timer(_osdTime, () {
+          if (mounted && !_infoPinned) {
+            _setInfo(false);
+          }
+        });
+      }
+    } else {
+      _infoPinned = false;
     }
   }
 
-  /// `I`: pin the banner, or hide it.
-  void _toggleInfo() {
-    if (_infoVisible) {
-      _infoPinned = false;
-      _setInfo(false);
-    } else {
+  /// `I`: show the banner for a while, or hide it now.
+  void _toggleInfo() => _setInfo(!_infoVisible);
+
+  /// `P` or the pin button: keep the banner on screen, or let it go again.
+  void _togglePin() {
+    if (!_infoVisible) {
       _infoPinned = true;
       _setInfo(true);
+      return;
+    }
+    final pinned = !_infoPinned;
+    setState(() => _infoPinned = pinned);
+    _bannerTimer?.cancel();
+    if (!pinned) {
+      _bannerTimer = Timer(_osdTime, () {
+        if (mounted && !_infoPinned) {
+          _setInfo(false);
+        }
+      });
     }
   }
 
   /// Show the banner for a few seconds when a channel opens.
   void _flashBanner() {
-    if (!kIsDesktop || _infoPinned || !_appState.settings.zapBanner) {
+    if (!kIsDesktop || !_appState.settings.zapBanner) {
       return;
     }
     _setInfo(true);
-    _bannerTimer = Timer(const Duration(seconds: 7), () {
-      if (mounted && !_infoPinned) {
-        _setInfo(false);
-      }
-    });
   }
 
   Future<void> _refreshInfo() async {
@@ -1238,6 +1370,8 @@ class _PlayerPageState extends State<PlayerPage> {
     _hideTimer?.cancel();
     _osdTimer?.cancel();
     _errorTimer?.cancel();
+    PipService.active.removeListener(_onPip);
+    unawaited(PipService.autoEnter(false));
     _infoTimer?.cancel();
     _bannerTimer?.cancel();
     _digitTimer?.cancel();
@@ -1344,6 +1478,8 @@ class _PlayerPageState extends State<PlayerPage> {
             }
           },
           const SingleActivator(LogicalKeyboardKey.keyH): _toggleHelp,
+          const SingleActivator(LogicalKeyboardKey.keyP): _togglePin,
+          const SingleActivator(LogicalKeyboardKey.keyG): _openEpg,
           const SingleActivator(LogicalKeyboardKey.f1): _toggleHelp,
           const SingleActivator(LogicalKeyboardKey.keyS): () {
             unawaited(showTrackSheet(context, _player));
@@ -1508,6 +1644,10 @@ class _PlayerPageState extends State<PlayerPage> {
         chips: chips,
         signal: SignalBadge(channel: _channel, meter: true),
         recording: _localRecording || state.activeRecordingFor(_channel) != null,
+        pinned: _infoPinned,
+        pinTooltip: _infoPinned ? strings.unpinOsd : strings.pinOsd,
+        onPin: _togglePin,
+        onClose: () => _setInfo(false),
       ),
     );
   }
@@ -1547,14 +1687,8 @@ class _PlayerPageState extends State<PlayerPage> {
               fit: StackFit.expand,
               children: <Widget>[
                 const ColoredBox(color: Colors.black),
-                Video(
-                  key: _videoKey,
-                  controller: _controller,
-                  controls: NoVideoControls,
-                  fit: _aspectMode == 4
-                      ? BoxFit.cover
-                      : (_aspectMode == 0 ? BoxFit.contain : BoxFit.fill),
-                  aspectRatio: _aspectRatios[_aspectMode],
+                _videoWithAspect(
+                  Size(constraints.maxWidth, constraints.maxHeight),
                 ),
                 if (dim > 0)
                   IgnorePointer(
@@ -1606,8 +1740,8 @@ class _PlayerPageState extends State<PlayerPage> {
                   ),
                 if (problem) _buildProblem(strings),
                 _buildControls(state, immersive: immersive, constraints: constraints),
-                if (_infoVisible && _osdKind == null)
-                  IgnorePointer(child: _infoBanner(state)),
+                if (_infoVisible && _osdKind == null && !_browserOpen && !_epgOpen)
+                  _infoBanner(state),
                 if (kIsDesktop &&
                     !_infoVisible &&
                     (_localRecording || state.activeRecordingFor(_channel) != null))
@@ -1632,6 +1766,25 @@ class _PlayerPageState extends State<PlayerPage> {
                     onTune: _tuneFromBrowser,
                     onGroupChanged: state.setGroupFilter,
                     onClose: _closeBrowser,
+                  ),
+                if (_epgOpen)
+                  StbEpgPanel(
+                    channel: _channel,
+                    programmes: <Programme>[
+                      for (final programme in state.epg.programmesFor(_channel))
+                        if (programme.stop.isAfter(
+                          state.now.subtract(const Duration(minutes: 30)),
+                        ))
+                          programme,
+                    ],
+                    now: state.now,
+                    use24: state.settings.use24HourTime,
+                    allowInsecure:
+                        state.activeSource?.allowInsecureCerts ?? false,
+                    canRecord: !isSyntheticChannel(_channel),
+                    onRecord: _recordFromEpg,
+                    onRecordSeries: (p) => _recordFromEpg(p, series: true),
+                    onClose: _closeEpg,
                   ),
                 if (_helpOpen) StbHelpOverlay(onClose: _toggleHelp),
                 if (_osdKind != null)
@@ -1950,6 +2103,8 @@ class _PlayerPageState extends State<PlayerPage> {
                                 _cycleAspect),
                             icon(Icons.info_outline_rounded, strings.infoTooltip,
                                 _toggleInfo),
+                            icon(Icons.event_note_rounded, strings.stbEpg,
+                                _openEpg),
                             icon(Icons.keyboard_alt_outlined, strings.helpTooltip,
                                 _toggleHelp),
                           ],
@@ -1995,10 +2150,15 @@ class _PlayerPageState extends State<PlayerPage> {
       return _desktopControls(state, current);
     }
 
+    if (PipService.active.value) {
+      // The floating window shows only the picture.
+      return const SizedBox.shrink();
+    }
+    final visible = _controlsVisible && !_browserOpen && !_epgOpen;
     return IgnorePointer(
-      ignoring: !_controlsVisible,
+      ignoring: !visible,
       child: AnimatedOpacity(
-        opacity: _controlsVisible ? 1 : 0,
+        opacity: visible ? 1 : 0,
         duration: const Duration(milliseconds: 180),
         child: Stack(
           fit: StackFit.expand,
@@ -2066,10 +2226,27 @@ class _PlayerPageState extends State<PlayerPage> {
                         ),
                       ),
                       _RoundButton(
-                        tooltip: strings.diagnostics,
-                        icon: Icons.monitor_heart_outlined,
-                        onPressed: () => unawaited(_showDiagnostics()),
+                        tooltip: strings.stbChannels,
+                        icon: Icons.list_rounded,
+                        onPressed: _openBrowser,
                       ),
+                      _RoundButton(
+                        tooltip: strings.stbEpg,
+                        icon: Icons.event_note_rounded,
+                        onPressed: _openEpg,
+                      ),
+                      if (Platform.isAndroid)
+                        _RoundButton(
+                          tooltip: strings.pipButton,
+                          icon: Icons.picture_in_picture_alt_rounded,
+                          onPressed: () => unawaited(PipService.enter()),
+                        ),
+                      if (constraints.maxWidth >= 560)
+                        _RoundButton(
+                          tooltip: strings.diagnostics,
+                          icon: Icons.monitor_heart_outlined,
+                          onPressed: () => unawaited(_showDiagnostics()),
+                        ),
                       _RoundButton(
                         tooltip: _fullscreen
                             ? strings.exitFullScreen

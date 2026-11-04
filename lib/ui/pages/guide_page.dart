@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/bidi.dart';
+import '../../core/platform.dart';
 import '../../core/theme.dart';
+import '../../core/ui_zoom.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../l10n/strings.dart';
@@ -145,6 +147,19 @@ class _GuidePageState extends State<GuidePage> {
 
   @override
   Widget build(BuildContext context) {
+    final chosen = context.select<AppState, double>(
+      (state) => state.settings.guideScale,
+    );
+    // The timeline is dense; on a big desktop screen it gets its own extra
+    // zoom on top of the interface zoom.
+    final scale = chosen > 0 ? chosen : (kIsDesktop ? 1.2 : 1.0);
+    return UiZoom(
+      scale: scale,
+      child: Builder(builder: _buildGuide),
+    );
+  }
+
+  Widget _buildGuide(BuildContext context) {
     final state = context.watch<AppState>();
     final strings = context.strings;
     final colors = context.mawjColors;

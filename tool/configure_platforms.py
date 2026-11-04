@@ -77,6 +77,14 @@ def patch_android_manifest() -> None:
             count=1,
         )
 
+    if "supportsPictureInPicture" not in text:
+        text = re.sub(
+            r"<activity\b",
+            '<activity\n            android:supportsPictureInPicture="true"',
+            text,
+            count=1,
+        )
+
     text = re.sub(
         r'android:label="[^"]*"',
         f'android:label="{APP_LABEL}"',
@@ -85,6 +93,78 @@ def patch_android_manifest() -> None:
     )
     write(manifest, text)
     print("  patched AndroidManifest.xml")
+
+
+MAIN_ACTIVITY = """package com.mmbesar.mawjtvh
+
+import android.app.PictureInPictureParams
+import android.os.Build
+import android.util.Rational
+import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
+
+// Picture-in-picture for the player: Dart asks to float the video, and
+// (optionally) the window floats by itself when the user leaves the app.
+class MainActivity : FlutterActivity() {
+    private var channel: MethodChannel? = null
+    private var autoEnter = false
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        val pip = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mawjtvh/pip")
+        channel = pip
+        pip.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "enter" -> result.success(enterPip())
+                "autoEnter" -> {
+                    autoEnter = call.arguments as? Boolean ?: false
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    private fun enterPip(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return false
+        }
+        return try {
+            val params = PictureInPictureParams.Builder()
+                .setAspectRatio(Rational(16, 9))
+                .build()
+            enterPictureInPictureMode(params)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (autoEnter) {
+            enterPip()
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode)
+        channel?.invokeMethod("pip", isInPictureInPictureMode)
+    }
+}
+"""
+
+
+def patch_android_activity() -> None:
+    kotlin = ANDROID / "app" / "src" / "main" / "kotlin" / "com" / "mmbesar" / "mawjtvh"
+    if not (ANDROID / "app" / "src" / "main").is_dir():
+        print("  android sources not found; skipping MainActivity")
+        return
+    target = kotlin / "MainActivity.kt"
+    if target.exists() and read(target) == MAIN_ACTIVITY:
+        return
+    write(target, MAIN_ACTIVITY)
+    print("  wrote MainActivity.kt (picture-in-picture)")
 
 
 SIGNING_HEADER = """import java.io.FileInputStream
@@ -230,6 +310,7 @@ def main() -> int:
 
     print("Configuring MawjTVH platform shells:")
     patch_android_manifest()
+    patch_android_activity()
     patch_android_gradle()
     patch_android_icons()
     patch_linux()

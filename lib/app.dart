@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import 'core/catppuccin.dart';
 import 'core/theme.dart';
+import 'core/ui_zoom.dart';
 import 'data/app_state.dart';
 import 'data/models.dart';
 import 'l10n/strings.dart';
@@ -68,11 +71,20 @@ class MawjApp extends StatelessWidget {
           scrollBehavior: const MawjScrollBehavior(),
           builder: (context, child) {
             final media = MediaQuery.of(context);
-            return MediaQuery(
-              data: media.copyWith(
-                alwaysUse24HourFormat: settings.use24HourTime,
+            return CallbackShortcuts(
+              bindings: uiZoomShortcuts(
+                current: () => state.settings.uiScale,
+                onChange: (scale) => unawaited(state.setUiScale(scale)),
               ),
-              child: child ?? const SizedBox.shrink(),
+              child: UiZoom(
+                scale: effectiveUiScale(settings.uiScale),
+                child: MediaQuery(
+                  data: media.copyWith(
+                    alwaysUse24HourFormat: settings.use24HourTime,
+                  ),
+                  child: child ?? const SizedBox.shrink(),
+                ),
+              ),
             );
           },
           home: const AppShell(),

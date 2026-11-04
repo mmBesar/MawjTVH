@@ -52,6 +52,7 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
   static const double _rowHeight = 68;
 
   final FocusNode _focus = FocusNode(debugLabel: 'stb-browser');
+  final TextEditingController _search = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final ScrollController _tabScroll = ScrollController();
   late final List<GlobalKey> _tabKeys;
@@ -81,6 +82,7 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
   @override
   void dispose() {
     _focus.dispose();
+    _search.dispose();
     _scroll.dispose();
     _tabScroll.dispose();
     super.dispose();
@@ -195,6 +197,9 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
   }
 
   void _setQuery(String query) {
+    if (_search.text != query) {
+      _search.text = query;
+    }
     setState(() {
       _query = query;
       _selected = 0;
@@ -297,9 +302,13 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
   Widget build(BuildContext context) {
     final strings = context.strings;
     final colors = context.mawjColors;
+    final size = MediaQuery.sizeOf(context);
+    // Phones get a sheet from the bottom and a real search box; desktop gets
+    // the side panel driven by keys.
+    final compact = size.width < 720;
     return Focus(
       focusNode: _focus,
-      onKeyEvent: _onKey,
+      onKeyEvent: compact ? null : _onKey,
       child: Stack(
         fit: StackFit.expand,
         children: <Widget>[
@@ -319,10 +328,15 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
             ),
           ),
           Align(
-            alignment: AlignmentDirectional.centerStart,
+            alignment: compact
+                ? Alignment.bottomCenter
+                : AlignmentDirectional.centerStart,
             child: Container(
-              width: 500,
-              margin: const EdgeInsets.fromLTRB(20, 56, 20, 20),
+              width: compact ? double.infinity : 500,
+              height: compact ? size.height * 0.78 : null,
+              margin: compact
+                  ? const EdgeInsets.fromLTRB(8, 0, 8, 8)
+                  : const EdgeInsets.fromLTRB(20, 56, 20, 20),
               decoration: stbPanelDecoration(colors.accent),
               child: Column(
                 children: <Widget>[
@@ -397,7 +411,28 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: _query.isEmpty
+                          child: compact
+                              ? TextField(
+                                  controller: _search,
+                                  onChanged: _setQuery,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                  ),
+                                  cursorColor: colors.accent,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    filled: false,
+                                    hintText: strings.stbSearch,
+                                    hintStyle: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.4),
+                                    ),
+                                  ),
+                                )
+                              : _query.isEmpty
                               ? Text(
                                   strings.stbSearch,
                                   style: TextStyle(
@@ -463,6 +498,7 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
                             },
                           ),
                   ),
+                  if (!compact)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(18, 8, 18, 14),
                     child: Text(

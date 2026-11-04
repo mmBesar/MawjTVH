@@ -185,6 +185,40 @@ class _ProgrammeSheet extends StatelessWidget {
               ),
             ),
           ],
+          if (programme.badges.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: <Widget>[
+                for (final badge in programme.badges)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.accent.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: Text(
+                      badge,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colors.accent,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+          if (_seriesLine(strings, programme) != null) ...<Widget>[
+            const SizedBox(height: 8),
+            BidiText(
+              _seriesLine(strings, programme)!,
+              style: theme.textTheme.bodySmall?.copyWith(color: colors.subtext0),
+            ),
+          ],
           if (programme.categories.isNotEmpty && programme.facts == null) ...<Widget>[
             const SizedBox(height: 16),
             Wrap(
@@ -303,4 +337,22 @@ class _ProgrammeSheet extends StatelessWidget {
       ),
     );
   }
+}
+
+/// "Season 2 of 5 · Episode 3 of 10 · First aired 2019-05-03", from whatever
+/// the guide knows.
+String? _seriesLine(AppStrings strings, Programme programme) {
+  final parts = <String>[
+    if (programme.season != null)
+      programme.seasonCount != null
+          ? strings.seasonOf(programme.season!, programme.seasonCount!)
+          : strings.seasonN(programme.season!),
+    if (programme.episodeNumber != null)
+      programme.episodeCount != null
+          ? strings.episodeOf(programme.episodeNumber!, programme.episodeCount!)
+          : strings.episodeN(programme.episodeNumber!),
+    if (programme.firstAired != null)
+      strings.firstAiredOn(strings.formatDate(programme.firstAired!)),
+  ];
+  return parts.isEmpty ? null : parts.join(' · ');
 }
