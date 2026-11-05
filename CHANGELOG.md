@@ -1,7 +1,8 @@
 # Changelog
 
-## 0.1.5
+## 0.1.6
 
+- Packaging: the Linux build no longer fails at random on a broken pipe.
 - Player: the channel browser and guide now cover the whole app (also when the player is a small window on a phone) and no longer react as volume or brightness gestures. On desktop they stop above the control bar, which stays visible.
 - Aspect ratio, deinterlacing and audio delay go back to normal on every channel change; `X` resets them on demand.
 - Android controls are laid out in rows (top bar, transport, buttons, now playing, channel strip) so nothing hides behind anything else.
@@ -14,6 +15,9 @@
 - Channel banner shows the network, mux and provider the server tuned, and the channel's tags.
 - Bigger channel logos on cards and the logo wall when there is no programme picture; the hover play button no longer covers the logo.
 - Tag rows (Watch, Guide, in-player browser) scroll with the mouse wheel as well as by dragging.
+
+## 0.1.5
+
 - Aspect ratio fixed: it now reshapes the normally fitted picture, `Auto` always returns to the original, and Zoom fills the window without stretching.
 - Channel banner: wider (up to 96% of the window), much bigger type that scales with the window, pin and close buttons, `P` pins it from the keyboard, a click anywhere else dismisses it, and it goes away by itself after the time set in Settings. Bigger notices too.
 - Channel guide panel over the picture (`G`, or the guide button on mobile): what is on and next, details of the highlighted programme, record and record series.
