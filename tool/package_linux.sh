@@ -134,7 +134,7 @@ bundle_runtime_libraries() {
     fi
   done
   if [[ -z "$mpv" ]] && command -v ldconfig >/dev/null 2>&1; then
-    mpv="$(ldconfig -p 2>/dev/null | awk '/libmpv\.so\.2 /{print $NF; exit}')"
+    mpv="$(awk '/libmpv\.so\.2 /{print $NF; exit}' <<<"$(ldconfig -p 2>/dev/null || true)")"
   fi
   if [[ -z "$mpv" ]]; then
     for candidate in /usr/lib/*/libmpv.so.2 /usr/lib/libmpv.so.2 \
@@ -192,10 +192,12 @@ bundle_runtime_libraries() {
         if [[ -z "$needed_lib" ]]; then
           continue
         fi
-        resolved="$(printf '%s\n' "$ldd_output" | awk -v n="$needed_lib" '
+        # A here-string, not a pipe: awk exits early, and a pipe would then
+        # fail with SIGPIPE under `set -o pipefail`.
+        resolved="$(awk -v n="$needed_lib" '
           $1 == n && $2 == "=>" { print $3; exit }
           $1 == n && $2 != "=>" { print $1; exit }
-        ')"
+        ' <<<"$ldd_output")"
         if [[ -z "$resolved" || ! -e "$resolved" ]]; then
           continue
         fi
