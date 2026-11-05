@@ -19,6 +19,7 @@ class HtspStreamProxy {
     this.profile = '',
     this.onSignal,
     this.onStatus,
+    this.onSource,
   });
 
   final HtspConnection _connection;
@@ -31,6 +32,10 @@ class HtspStreamProxy {
   /// Called with the server's reason when a channel cannot be delivered
   /// (`noFreeAdapter`, `badSignal`...), and with null once media flows.
   final void Function(String channelId, String? issue)? onStatus;
+
+  /// Where the stream comes from (adapter, network, mux, provider, service),
+  /// as the server reports it when a subscription starts.
+  final void Function(String channelId, Map<String, String> info)? onSource;
 
   HttpServer? _server;
   int _nextSubscription = 100;
@@ -257,6 +262,18 @@ class _Feed {
                   );
                 }
               }
+            }
+          }
+          final source = message['sourceinfo'];
+          if (source is Map) {
+            final info = <String, String>{};
+            source.forEach((key, value) {
+              if (key is String && value is String && value.isNotEmpty) {
+                info[key] = value;
+              }
+            });
+            if (info.isNotEmpty) {
+              proxy.onSource?.call('$channel', info);
             }
           }
           _mux.configure(streams);

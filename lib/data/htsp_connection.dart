@@ -109,7 +109,27 @@ class HtspConnection {
     }
   }
 
+  Timer? _heartbeat;
+
+  void _startHeartbeat() {
+    try {
+      _socket.setOption(SocketOption.tcpNoDelay, true);
+    } catch (_) {}
+    _heartbeat = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (_isClosed) {
+        timer.cancel();
+        return;
+      }
+      request(
+        'getSysTime',
+        const <String, Object?>{},
+        timeout: const Duration(seconds: 15),
+      ).then<void>((_) {}, onError: (Object _) {});
+    });
+  }
+
   void _listen() {
+    _startHeartbeat();
     _socket.listen(
       (chunk) {
         try {
@@ -153,6 +173,7 @@ class HtspConnection {
       return;
     }
     _isClosed = true;
+    _heartbeat?.cancel();
     for (final waiter in _waiting.values) {
       if (!waiter.isCompleted) {
         waiter.completeError(error);
@@ -198,7 +219,11 @@ class HtspConnection {
       timeout,
       onTimeout: () {
         _waiting.remove(seq);
-        throw HtspException('The server did not answer $method');
+        // A server that stops answering is a dead session. Closing it lets the
+        // app reconnect instead of staying stuck until it is restarted.
+        final error = HtspException('The server did not answer $method');
+        _fail(error);
+        throw error;
       },
     );
   }

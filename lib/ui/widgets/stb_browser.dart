@@ -10,6 +10,7 @@ import '../../l10n/strings.dart';
 import '../../l10n/tvh_strings.dart';
 import 'channel_logo.dart';
 import 'stb_osd.dart';
+import 'wheel_scroll.dart';
 
 /// The channel list that slides over the picture: tags across the top, the
 /// channels with what is on now below. Fully usable from the keyboard (arrows,
@@ -375,8 +376,10 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
                   ),
                   SizedBox(
                     height: 42,
-                    child: SingleChildScrollView(
+                    child: WheelScroll(
                       controller: _tabScroll,
+                      builder: (context, controller) => SingleChildScrollView(
+                      controller: controller,
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(
@@ -393,6 +396,7 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
                             ),
                         ],
                       ),
+                    ),
                     ),
                   ),
                   Container(

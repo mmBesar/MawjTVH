@@ -16,6 +16,7 @@ import '../widgets/channel_art.dart';
 import '../widgets/channel_logo.dart';
 import '../widgets/channel_row.dart';
 import '../widgets/channel_tile.dart';
+import '../widgets/wheel_scroll.dart';
 import '../widgets/channel_views.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_banner.dart';
@@ -585,8 +586,8 @@ class _HeroCard extends StatelessWidget {
                     ChannelLogo(
                       channel: channel,
                       allowInsecure: allowInsecure,
-                      size: 40,
-                      radius: 12,
+                      size: hasArt ? 40 : 56,
+                      radius: hasArt ? 12 : 16,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -723,20 +724,23 @@ class _FilterBar extends StatelessWidget {
     ];
     return SizedBox(
       height: 56,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: padding, vertical: 10),
-        itemCount: entries.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final entry = entries[index];
-          return _Pill(
-            label: entry.$2,
-            selected: entry.$1 == selected,
-            star: entry.$1 == favoritesKey,
-            onTap: () => onSelected(entry.$1),
-          );
-        },
+      child: WheelScroll(
+        builder: (context, controller) => ListView.separated(
+          controller: controller,
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.symmetric(horizontal: padding, vertical: 10),
+          itemCount: entries.length,
+          separatorBuilder: (context, index) => const SizedBox(width: 8),
+          itemBuilder: (context, index) {
+            final entry = entries[index];
+            return _Pill(
+              label: entry.$2,
+              selected: entry.$1 == selected,
+              star: entry.$1 == favoritesKey,
+              onTap: () => onSelected(entry.$1),
+            );
+          },
+        ),
       ),
     );
   }

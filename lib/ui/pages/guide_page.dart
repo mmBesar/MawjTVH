@@ -19,6 +19,7 @@ import '../widgets/programme_sheet.dart';
 import '../widgets/warnings_panel.dart';
 import 'channel_guide_page.dart';
 import 'search_page.dart';
+import '../widgets/wheel_scroll.dart';
 
 /// A twelve-hour timeline. The channel column stays put while the programmes
 /// scroll sideways, and both scroll up and down together.
@@ -283,7 +284,8 @@ class _GuidePageState extends State<GuidePage> {
           if (state.groups.isNotEmpty)
             SizedBox(
               height: 44,
-              child: ListView(
+              child: WheelScroll(builder: (context, controller) => ListView(
+                controller: controller,
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: <Widget>[
@@ -305,7 +307,7 @@ class _GuidePageState extends State<GuidePage> {
                       ),
                     ),
                 ],
-              ),
+              )),
             ),
           WarningsPanel(warnings: state.warnings),
           if (channels.isEmpty)

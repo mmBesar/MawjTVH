@@ -381,6 +381,15 @@ class _PlayerPageState extends State<PlayerPage> {
       await _setMpvProperty('network-timeout', '90');
       await _setMpvProperty('tls-verify', allowInsecure ? 'no' : 'yes');
       await _setMpvProperty('demuxer-lavf-o', _demuxerLavfOptions);
+      if (!mounted) {
+        return;
+      }
+      // Reconnects first when the server session dropped, so the address is
+      // always one that answers.
+      _channel = await context.read<AppState>().prepareStream(_channel);
+      if (!mounted) {
+        return;
+      }
       await _player.open(
         Media(
           _channel.url,
@@ -435,8 +444,9 @@ class _PlayerPageState extends State<PlayerPage> {
         // The programme on air, when the guide knows it, goes in the name.
         title: state.epg.nowFor(_channel, DateTime.now())?.title,
       );
+      final fresh = await state.prepareStream(_channel);
       final recorder = await StreamRecorder.start(
-        url: _channel.url,
+        url: fresh.url,
         path: path,
         allowInsecure: state.activeSource?.allowInsecureCerts ?? false,
         onError: (message) {
@@ -1605,7 +1615,12 @@ class _PlayerPageState extends State<PlayerPage> {
     final fps = double.tryParse(props['estimated-vf-fps'] ?? '');
     final channels = props['audio-params/hr-channels'];
     final decoder = props['hwdec-current'];
+    final source = state.sourceInfoFor(_channel);
     final chips = <String>[
+      if (source?['network'] != null) source!['network']!,
+      if (source?['mux'] != null) source!['mux']!,
+      if (source?['provider'] != null) source!['provider']!,
+      for (final tag in _channel.tags.take(4)) '#$tag',
       if (width > 0 && height > 0) '$width×$height',
       if (props['video-codec'] != null)
         props['video-codec']!.split(' ').first.toUpperCase(),

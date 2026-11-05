@@ -6,7 +6,7 @@ import '../../data/models.dart';
 import 'channel_logo.dart';
 
 /// Height of [ChannelWallTile] and [ChannelCompactRow].
-const double kChannelWallHeight = 196;
+const double kChannelWallHeight = 216;
 const double kChannelCompactHeight = 64;
 
 /// A big-logo tile for the "wall" view: many channels at a glance.
@@ -79,8 +79,8 @@ class ChannelWallTile extends StatelessWidget {
               ChannelLogo(
                 channel: channel,
                 allowInsecure: allowInsecure,
-                size: 72,
-                radius: 18,
+                size: 92,
+                radius: 22,
               ),
               const SizedBox(height: 10),
               BidiText(

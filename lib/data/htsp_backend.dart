@@ -70,6 +70,7 @@ class HtspBackend {
         },
         onStatus: (channelId, issue) =>
             backend.streamStatusListener?.call(channelId, issue),
+        onSource: (channelId, info) => backend._sourceInfo[channelId] = info,
       );
       try {
         await proxy.start();
@@ -453,6 +454,13 @@ class HtspBackend {
   DateTime? _signalAt;
   Completer<TvhSignal?>? _signalWaiter;
   Timer? _signalIdle;
+
+  final Map<String, Map<String, String>> _sourceInfo =
+      <String, Map<String, String>>{};
+
+  /// Adapter, network, mux, provider and service the server last used for
+  /// [channelId], or null before the channel has been tuned.
+  Map<String, String>? sourceInfoFor(String channelId) => _sourceInfo[channelId];
 
   /// Signal of the tuner serving [channelId], read from a lightweight second
   /// subscription to the same channel (the server shares the tuner, so this

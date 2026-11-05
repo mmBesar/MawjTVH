@@ -298,6 +298,23 @@ class AppState extends ChangeNotifier {
     _streamIssues.remove(channel.id);
   }
 
+  /// Returns [channel] with a stream address that works right now. When the
+  /// HTSP session has dropped, it reconnects first: the stream address belongs
+  /// to the session, so the old one no longer answers.
+  Future<Channel> prepareStream(Channel channel) async {
+    final session = _htspSession;
+    if (session != null && session.isClosed && !_disposed) {
+      _htspRetry?.cancel();
+      _htspRetry = null;
+      await load();
+    }
+    return _channelById[channel.id] ?? channel;
+  }
+
+  /// Network, mux and so on for the channel being watched (HTSP only).
+  Map<String, String>? sourceInfoFor(Channel channel) =>
+      _htspSession?.sourceInfoFor(channel.id);
+
   /// True while the native HTSP session is connected.
   bool get usesHtsp => _htspSession != null && !_htspSession!.isClosed;
 

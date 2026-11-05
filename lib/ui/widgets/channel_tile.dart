@@ -103,13 +103,20 @@ class _ChannelTileState extends State<ChannelTile> {
                               colors: gradient,
                             ),
                           ),
-                          child: Center(
-                            child: ChannelLogo(
-                              channel: widget.channel,
-                              allowInsecure: widget.allowInsecure,
-                              size: 64,
-                              radius: 18,
-                            ),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final side = (constraints.biggest.shortestSide *
+                                      0.62)
+                                  .clamp(64.0, 160.0);
+                              return Center(
+                                child: ChannelLogo(
+                                  channel: widget.channel,
+                                  allowInsecure: widget.allowInsecure,
+                                  size: side,
+                                  radius: side * 0.22,
+                                ),
+                              );
+                            },
                           ),
                         ),
                       if (hasArt)
@@ -123,11 +130,19 @@ class _ChannelTileState extends State<ChannelTile> {
                             radius: 10,
                           ),
                         ),
-                      Center(
+                      // With artwork the play button sits in the middle; without
+                      // it the logo is the picture, so the button moves to the
+                      // corner instead of covering it.
+                      Align(
+                        alignment: hasArt
+                            ? Alignment.center
+                            : AlignmentDirectional.bottomEnd,
                         child: AnimatedOpacity(
                           opacity: _hover ? 1 : 0,
                           duration: const Duration(milliseconds: 140),
-                          child: DecoratedBox(
+                          child: Padding(
+                            padding: EdgeInsets.all(hasArt ? 0 : 10),
+                            child: DecoratedBox(
                             decoration: BoxDecoration(
                               color: colors.accent,
                               shape: BoxShape.circle,
@@ -139,6 +154,7 @@ class _ChannelTileState extends State<ChannelTile> {
                                 size: 30,
                                 color: theme.colorScheme.onPrimary,
                               ),
+                            ),
                             ),
                           ),
                         ),

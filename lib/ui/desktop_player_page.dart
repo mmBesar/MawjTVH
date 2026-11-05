@@ -84,6 +84,10 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     unawaited(state.markWatched(_channel));
 
     try {
+      _channel = await state.prepareStream(_channel);
+      if (!mounted || generation != _generation) {
+        return;
+      }
       final session = await MpvRuntime.start(
         capabilities: widget.capabilities,
         url: _channel.url,
@@ -192,8 +196,9 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
         // The programme on air, when the guide knows it, goes in the name.
         title: state.epg.nowFor(_channel, DateTime.now())?.title,
       );
+      final fresh = await state.prepareStream(_channel);
       final recorder = await StreamRecorder.start(
-        url: _channel.url,
+        url: fresh.url,
         path: path,
         allowInsecure: state.activeSource?.allowInsecureCerts ?? false,
         onError: (message) {
@@ -232,7 +237,12 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     final session = _session;
     if (session != null && _phase == _Phase.playing) {
       unawaited(_appState.markWatched(channel));
-      await session.load(channel.url, 'MawjTVH · ${channel.name}');
+      final ready = await _appState.prepareStream(channel);
+      if (!mounted) {
+        return;
+      }
+      _channel = ready;
+      await session.load(ready.url, 'MawjTVH · ${channel.name}');
       if (mounted) {
         _scheduleDecoderProbe(session, _generation);
       }

@@ -2,6 +2,10 @@
 
 ## 0.1.5
 
+- Fix: a channel that would not tune until the app was restarted. A server that stops answering now closes the session so the app reconnects by itself (with a 30 s keep-alive), and every play or local recording first makes sure it has a working stream address.
+- Channel banner shows the network, mux and provider the server tuned, and the channel's tags.
+- Bigger channel logos on cards and the logo wall when there is no programme picture; the hover play button no longer covers the logo.
+- Tag rows (Watch, Guide, in-player browser) scroll with the mouse wheel as well as by dragging.
 - Aspect ratio fixed: it now reshapes the normally fitted picture, `Auto` always returns to the original, and Zoom fills the window without stretching.
 - Channel banner: wider (up to 96% of the window), much bigger type that scales with the window, pin and close buttons, `P` pins it from the keyboard, a click anywhere else dismisses it, and it goes away by itself after the time set in Settings. Bigger notices too.
 - Channel guide panel over the picture (`G`, or the guide button on mobile): what is on and next, details of the highlighted programme, record and record series.
