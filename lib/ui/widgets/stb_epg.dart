@@ -25,7 +25,11 @@ class StbEpgPanel extends StatefulWidget {
     required this.onRecord,
     required this.onRecordSeries,
     required this.onClose,
+    this.bottomInset = 0,
   });
+
+  /// Space kept free at the bottom (the desktop control bar).
+  final double bottomInset;
 
   final Channel channel;
 
@@ -155,27 +159,78 @@ class _StbEpgPanelState extends State<StbEpgPanel> {
     final strings = context.strings;
     final colors = context.mawjColors;
     final size = MediaQuery.sizeOf(context);
+    final pad = MediaQuery.paddingOf(context);
     final compact = size.width < 720;
+    // A phone on its side: full height, programmes and details side by side.
+    final short = !compact && size.height < 520;
+    final inset = short
+        ? 0.0
+        : widget.bottomInset.clamp(0.0, size.height * 0.25).toDouble();
     final programme = _current;
 
+    final programmeList = widget.programmes.isEmpty
+        ? Center(
+            child: Text(
+              strings.noGuide,
+              style: const TextStyle(color: Colors.white60, fontSize: 15),
+            ),
+          )
+        : ListView.builder(
+            controller: _scroll,
+            itemExtent: _rowHeight,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            itemCount: widget.programmes.length,
+            itemBuilder: (context, index) {
+              final item = widget.programmes[index];
+              return _EpgRow(
+                programme: item,
+                now: widget.now,
+                use24: widget.use24,
+                selected: index == _selected,
+                onTap: () => setState(() => _selected = index),
+              );
+            },
+          );
+    final details = programme == null
+        ? const SizedBox.shrink()
+        : _Details(
+            programme: programme,
+            now: widget.now,
+            use24: widget.use24,
+            canRecord: _recordable(programme),
+            onRecord: () => widget.onRecord(programme),
+            onRecordSeries: () => widget.onRecordSeries(programme),
+          );
+
     final panel = Container(
-      width: compact ? double.infinity : 560,
+      width: compact
+          ? double.infinity
+          : (short ? (size.width * 0.82).clamp(560.0, 920.0).toDouble() : 560),
       height: compact ? size.height * 0.78 : null,
       margin: compact
-          ? const EdgeInsets.fromLTRB(8, 0, 8, 8)
-          : const EdgeInsets.fromLTRB(20, 56, 20, 20),
+          ? EdgeInsets.fromLTRB(8, 0, 8, 8 + pad.bottom)
+          : short
+              ? EdgeInsets.fromLTRB(
+                  8,
+                  8 + pad.top,
+                  8 + pad.right,
+                  8 + pad.bottom,
+                )
+              : EdgeInsets.fromLTRB(20, 56, 20, 20 + inset),
       decoration: stbPanelDecoration(colors.accent),
       child: Column(
         children: <Widget>[
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
+            padding: short
+                ? const EdgeInsets.fromLTRB(14, 6, 4, 2)
+                : const EdgeInsets.fromLTRB(16, 14, 8, 8),
             child: Row(
               children: <Widget>[
                 ChannelLogo(
                   channel: widget.channel,
                   allowInsecure: widget.allowInsecure,
-                  size: 40,
-                  radius: 10,
+                  size: short ? 30 : 40,
+                  radius: 8,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -212,47 +267,25 @@ class _StbEpgPanelState extends State<StbEpgPanel> {
               ],
             ),
           ),
-          Expanded(
-            flex: 5,
-            child: widget.programmes.isEmpty
-                ? Center(
-                    child: Text(
-                      strings.noGuide,
-                      style: const TextStyle(color: Colors.white60, fontSize: 15),
-                    ),
-                  )
-                : ListView.builder(
-                    controller: _scroll,
-                    itemExtent: _rowHeight,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    itemCount: widget.programmes.length,
-                    itemBuilder: (context, index) {
-                      final item = widget.programmes[index];
-                      return _EpgRow(
-                        programme: item,
-                        now: widget.now,
-                        use24: widget.use24,
-                        selected: index == _selected,
-                        onTap: () => setState(() => _selected = index),
-                      );
-                    },
+          if (short)
+            Expanded(
+              child: Row(
+                children: <Widget>[
+                  Expanded(flex: 5, child: programmeList),
+                  Container(
+                    width: 1,
+                    color: Colors.white.withValues(alpha: 0.10),
                   ),
-          ),
-          Container(height: 1, color: Colors.white.withValues(alpha: 0.10)),
-          Expanded(
-            flex: 5,
-            child: programme == null
-                ? const SizedBox.shrink()
-                : _Details(
-                    programme: programme,
-                    now: widget.now,
-                    use24: widget.use24,
-                    canRecord: _recordable(programme),
-                    onRecord: () => widget.onRecord(programme),
-                    onRecordSeries: () => widget.onRecordSeries(programme),
-                  ),
-          ),
-          if (!compact)
+                  Expanded(flex: 6, child: details),
+                ],
+              ),
+            )
+          else ...<Widget>[
+            Expanded(flex: 5, child: programmeList),
+            Container(height: 1, color: Colors.white.withValues(alpha: 0.10)),
+            Expanded(flex: 5, child: details),
+          ],
+          if (!compact && !short)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
               child: Text(
@@ -274,6 +307,7 @@ class _StbEpgPanelState extends State<StbEpgPanel> {
         fit: StackFit.expand,
         children: <Widget>[
           Positioned.fill(
+            bottom: inset,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: widget.onClose,
@@ -432,12 +466,74 @@ class _Details extends StatelessWidget {
     return parts.isEmpty ? null : parts.join(' · ');
   }
 
+  static IconData _roleIcon(String role) {
+    switch (role.toLowerCase()) {
+      case 'director':
+        return Icons.movie_creation_outlined;
+      case 'presenter':
+      case 'commentator':
+      case 'guest':
+        return Icons.mic_none_rounded;
+      case 'writer':
+        return Icons.edit_outlined;
+      case 'producer':
+        return Icons.business_center_outlined;
+      case 'composer':
+        return Icons.music_note_outlined;
+      case 'actor':
+        return Icons.theater_comedy_outlined;
+      default:
+        return Icons.person_outline_rounded;
+    }
+  }
+
+  Widget _row(IconData icon, String text, {Color? color, double? size}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(icon, size: 17, color: Colors.white.withValues(alpha: 0.6)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: BidiText(
+              text,
+              style: TextStyle(
+                color: color ?? Colors.white.withValues(alpha: 0.82),
+                fontSize: size ?? 13.5,
+                height: 1.3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
     final colors = context.mawjColors;
     final minutes = programme.stop.difference(programme.start).inMinutes;
     final series = _series(strings);
+    final credits = <(String, String)>[];
+    final rawCredits = programme.credits;
+    if (rawCredits != null) {
+      for (final part in rawCredits.split(' · ')) {
+        final colon = part.indexOf(': ');
+        if (colon > 0) {
+          credits.add((part.substring(0, colon), part.substring(colon + 2)));
+        }
+      }
+    }
+    final rating = programme.rating;
+    final age = programme.ageRating;
+    final categories = programme.categories.isNotEmpty
+        ? programme.categories.join(' · ')
+        : programme.genre;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 10),
       child: Column(
@@ -463,20 +559,26 @@ class _Details extends StatelessWidget {
                 ),
               ),
             ),
-          const SizedBox(height: 6),
-          Text(
-            '${strings.formatDate(programme.start)} · '
-            '${strings.formatRange(programme.start, programme.stop, use24HourTime: use24)}'
-            ' · $minutes ${strings.minutesShort}'
-            '${programme.episode != null ? ' · ${programme.episode}' : ''}',
-            style: TextStyle(
-              color: colors.accent,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w700,
-            ),
+          const SizedBox(height: 10),
+          _row(
+            Icons.schedule_rounded,
+            strings.formatRange(programme.start, programme.stop, use24HourTime: use24),
+            color: colors.accent,
           ),
+          _row(Icons.calendar_today_rounded, strings.formatDate(programme.start)),
+          _row(Icons.timelapse_rounded, '$minutes ${strings.minutesShort}'),
+          if (programme.episode != null && programme.episode!.isNotEmpty)
+            _row(Icons.video_library_outlined, programme.episode!),
+          if (series != null) _row(Icons.layers_outlined, series),
+          if (rating != null && rating > 0)
+            _row(Icons.star_rounded, rating.toStringAsFixed(1)),
+          if (age != null && age > 0) _row(Icons.shield_outlined, '$age+'),
+          if (categories != null && categories.isNotEmpty)
+            _row(Icons.category_outlined, categories),
+          if (programme.year != null && programme.year! > 0)
+            _row(Icons.event_note_outlined, '${programme.year}'),
           if (programme.badges.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 8),
+            const SizedBox(height: 3),
             Wrap(
               spacing: 6,
               runSpacing: 6,
@@ -500,16 +602,6 @@ class _Details extends StatelessWidget {
               ],
             ),
           ],
-          if (series != null) ...<Widget>[
-            const SizedBox(height: 8),
-            Text(
-              series,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.65),
-                fontSize: 13,
-              ),
-            ),
-          ],
           if ((programme.description ?? '').isNotEmpty) ...<Widget>[
             const SizedBox(height: 10),
             BidiText(
@@ -521,26 +613,10 @@ class _Details extends StatelessWidget {
               ),
             ),
           ],
-          if (programme.facts != null) ...<Widget>[
+          if (credits.isNotEmpty) ...<Widget>[
             const SizedBox(height: 10),
-            BidiText(
-              programme.facts!,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 12.5,
-              ),
-            ),
-          ],
-          if (programme.credits != null) ...<Widget>[
-            const SizedBox(height: 4),
-            BidiText(
-              programme.credits!,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 12.5,
-                height: 1.4,
-              ),
-            ),
+            for (final credit in credits)
+              _row(_roleIcon(credit.$1), credit.$2),
           ],
           const SizedBox(height: 12),
           if (programme.hasRecording)

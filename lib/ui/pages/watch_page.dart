@@ -311,6 +311,37 @@ class _WatchPageState extends State<WatchPage> {
                     },
                   ),
                 )
+              else if (view == 'cards')
+                // Phones: real cards, two to a row (the list is its own view).
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(sidePadding, 4, sidePadding, 120),
+                  sliver: SliverGrid.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisExtent: 276,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                    ),
+                    itemCount: channels.length,
+                    itemBuilder: (context, index) {
+                      final channel = channels[index];
+                      return ChannelTile(
+                        channel: channel,
+                        programme: state.epg.nowFor(channel, state.now),
+                        next: state.epg.nextFor(channel, state.now),
+                        now: state.now,
+                        allowInsecure: allowInsecure,
+                        favorite: state.isFavorite(channel),
+                        onPlay: () => openPlayer(context, channel),
+                        onOpenGuide: () =>
+                            ChannelGuidePage.open(context, channel),
+                        onToggleFavorite: () =>
+                            unawaited(state.toggleFavorite(channel)),
+                      );
+                    },
+                  ),
+                )
               else
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(sidePadding, 4, sidePadding, 120),

@@ -205,6 +205,10 @@ extension TvhStrings on AppStrings {
   String get onWord => isArabic ? 'تشغيل' : 'On';
   String get offWord => isArabic ? 'إيقاف' : 'Off';
   String get audioDelayLabel => isArabic ? 'تأخير الصوت' : 'Audio delay';
+  String get resetPictureLabel =>
+      isArabic ? 'إعادة ضبط الصورة والصوت' : 'Picture and audio reset';
+  String get resetPictureDone =>
+      isArabic ? 'النسبة وإزالة التداخل وتأخير الصوت' : 'Aspect, deinterlace, audio delay';
   String get noOtherTracks => isArabic ? 'لا يوجد مسار آخر' : 'No other track';
 
   /// Key / action pairs for the shortcuts sheet. Keys are space separated.
@@ -226,6 +230,7 @@ extension TvhStrings on AppStrings {
           ('[ ]', 'تأخير الصوت −/+ 50ms'),
           ('Z', 'تغيير نسبة العرض'),
           ('T', 'إزالة التداخل'),
+          ('X', 'إعادة ضبط النسبة والتداخل وتأخير الصوت'),
           ('R', 'تسجيل على هذا الجهاز'),
           ('D', 'التشخيص'),
           ('Ctrl + − 0', 'تكبير وتصغير الواجهة'),
@@ -249,6 +254,7 @@ extension TvhStrings on AppStrings {
           ('[ ]', 'Audio delay −/+ 50 ms'),
           ('Z', 'Cycle aspect ratio'),
           ('T', 'Deinterlace'),
+          ('X', 'Reset aspect, deinterlace and audio delay'),
           ('R', 'Record on this device'),
           ('D', 'Diagnostics'),
           ('H F1', 'This sheet'),

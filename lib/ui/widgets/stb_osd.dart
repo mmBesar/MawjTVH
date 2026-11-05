@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../core/bidi.dart';
@@ -220,6 +222,14 @@ class StbMessageOsd extends StatelessWidget {
   }
 }
 
+/// One line of banner detail: an icon and a text.
+class StbInfoRow {
+  const StbInfoRow(this.icon, this.text);
+
+  final IconData icon;
+  final String text;
+}
+
 /// What the channel banner shows.
 class StbBannerData {
   const StbBannerData({
@@ -239,7 +249,7 @@ class StbBannerData {
     this.nowDescription,
     this.nextTitle,
     this.nextRange,
-    this.chips = const <String>[],
+    this.rows = const <StbInfoRow>[],
     this.signal,
     this.recording = false,
     this.bottomInset = 96,
@@ -262,8 +272,8 @@ class StbBannerData {
   final String? nextTitle;
   final String? nextRange;
 
-  /// Stream facts: `1920×1080`, `H264`, `AC3 5.1`...
-  final List<String> chips;
+  /// Tags, source, video, audio, decoder and dropped frames, one per line.
+  final List<StbInfoRow> rows;
 
   /// A signal meter, when the account can see tuner status.
   final Widget? signal;
@@ -289,9 +299,15 @@ class StbBanner extends StatelessWidget {
         final available = constraints.maxWidth;
         final width = available <= 0
             ? 1200.0
-            : (available * 0.96).clamp(280.0, 1560.0).toDouble();
-        // 1.0 at 1500 logical pixels wide; smaller windows shrink the type.
-        final k = (width / 1500).clamp(0.62, 1.1).toDouble();
+            : (available * 0.94).clamp(280.0, 1400.0).toDouble();
+        // The size follows both the width and the height of the window, so a
+        // short window (a phone on its side) gets a small banner too.
+        final height = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : 900.0;
+        final k = math.min(width / 1700, height / 820)
+            .clamp(0.42, 1.0)
+            .toDouble();
         double f(double value) => value * k;
         final wide = width >= 860;
 
@@ -299,15 +315,9 @@ class StbBanner extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Wrap(
-              spacing: f(8),
-              runSpacing: f(8),
-              children: <Widget>[
-                for (final chip in data.chips) _Chip(text: chip, scale: k),
-              ],
-            ),
+            for (final row in data.rows) _InfoLine(row: row, scale: k),
             if (data.signal != null) ...<Widget>[
-              SizedBox(height: f(16)),
+              SizedBox(height: f(10)),
               data.signal!,
             ],
           ],
@@ -502,7 +512,7 @@ class StbBanner extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.12),
                 ),
                 SizedBox(width: f(26)),
-                SizedBox(width: f(300), child: details),
+                SizedBox(width: f(360), child: details),
               ],
             ],
           ),
@@ -556,28 +566,37 @@ class StbBanner extends StatelessWidget {
   }
 }
 
-class _Chip extends StatelessWidget {
-  const _Chip({required this.text, this.scale = 1});
+class _InfoLine extends StatelessWidget {
+  const _InfoLine({required this.row, this.scale = 1});
 
-  final String text;
+  final StbInfoRow row;
   final double scale;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 6 * scale),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.09),
-        borderRadius: BorderRadius.circular(10 * scale),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 17 * scale,
-          fontWeight: FontWeight.w700,
-        ),
+    return Padding(
+      padding: EdgeInsets.only(bottom: 6 * scale),
+      child: Row(
+        children: <Widget>[
+          Icon(
+            row.icon,
+            size: 20 * scale,
+            color: Colors.white.withValues(alpha: 0.6),
+          ),
+          SizedBox(width: 10 * scale),
+          Expanded(
+            child: BidiText(
+              row.text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18 * scale,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

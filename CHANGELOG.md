@@ -2,6 +2,14 @@
 
 ## 0.1.5
 
+- Player: the channel browser and guide now cover the whole app (also when the player is a small window on a phone) and no longer react as volume or brightness gestures. On desktop they stop above the control bar, which stays visible.
+- Aspect ratio, deinterlacing and audio delay go back to normal on every channel change; `X` resets them on demand.
+- Android controls are laid out in rows (top bar, transport, buttons, now playing, channel strip) so nothing hides behind anything else.
+- Landscape phone: the channel browser and guide are full-height side panels with a slim header, and the guide shows programmes and details side by side.
+- Info banner is smaller, sizes itself from both the width and height of the window, and shows tags, source, video, audio, decoder and dropped frames as icon rows.
+- Guide details use icon rows for time, date, length, rating, category and each credit role.
+- Phone Cards view: real cards, two per row, separate from the List view.
+- The hover play button sits in the bottom corner of channel cards.
 - Fix: a channel that would not tune until the app was restarted. A server that stops answering now closes the session so the app reconnects by itself (with a 30 s keep-alive), and every play or local recording first makes sure it has a working stream address.
 - Channel banner shows the network, mux and provider the server tuned, and the channel's tags.
 - Bigger channel logos on cards and the logo wall when there is no programme picture; the hover play button no longer covers the logo.

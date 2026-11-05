@@ -494,6 +494,7 @@ class _PlayerPageState extends State<PlayerPage> {
     }
     final previous = _channel;
     setState(() => _channel = channel);
+    _resetPicture();
     _showControls();
     // Free the tuner of the channel being left once the new one has taken
     // over the player, so the old stream is not cut under it.
@@ -889,6 +890,29 @@ class _PlayerPageState extends State<PlayerPage> {
       strings.aspectLabel,
       strings.aspectName(next),
     );
+  }
+
+  /// Back to the stream's own picture: original aspect, no deinterlacing, no
+  /// audio delay. Runs on every channel change; the X key does it on demand.
+  void _resetPicture({bool announce = false}) {
+    final changed = _aspectMode != 0 || _deinterlace || _audioDelay != 0;
+    if (changed) {
+      setState(() {
+        _aspectMode = 0;
+        _deinterlace = false;
+        _audioDelay = 0;
+      });
+      unawaited(_setMpvProperty('deinterlace', 'no'));
+      unawaited(_setMpvProperty('audio-delay', '0'));
+    }
+    if (announce) {
+      final strings = context.strings;
+      _showMessage(
+        Icons.restart_alt_rounded,
+        strings.resetPictureLabel,
+        strings.resetPictureDone,
+      );
+    }
   }
 
   void _toggleDeinterlace() {
@@ -1498,6 +1522,8 @@ class _PlayerPageState extends State<PlayerPage> {
           const SingleActivator(LogicalKeyboardKey.keyJ): _cycleSubtitle,
           const SingleActivator(LogicalKeyboardKey.keyZ): _cycleAspect,
           const SingleActivator(LogicalKeyboardKey.keyT): _toggleDeinterlace,
+          const SingleActivator(LogicalKeyboardKey.keyX): () =>
+              _resetPicture(announce: true),
           const SingleActivator(LogicalKeyboardKey.keyR): () {
             unawaited(_toggleLocalRecording());
           },
@@ -1547,6 +1573,55 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
+  /// The channel browser and the guide sit above the whole screen, outside the
+  /// picture's gesture detector, so touching them never changes volume or
+  /// brightness, and in a small player window they cover the whole app.
+  Widget _panels(AppState state) {
+    final inset = _isDesktop ? 150.0 : 0.0;
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          if (_browserOpen)
+            StbChannelBrowser(
+              channels: state.channels,
+              favorites: state.favorites,
+              groups: state.groups,
+              initialGroup: state.groupFilter,
+              current: _channel,
+              now: state.now,
+              nowFor: (channel) => state.epg.nowFor(channel, state.now),
+              allowInsecure: state.activeSource?.allowInsecureCerts ?? false,
+              onTune: _tuneFromBrowser,
+              onGroupChanged: state.setGroupFilter,
+              onClose: _closeBrowser,
+              bottomInset: inset,
+            ),
+          if (_epgOpen)
+            StbEpgPanel(
+              channel: _channel,
+              programmes: <Programme>[
+                for (final programme in state.epg.programmesFor(_channel))
+                  if (programme.stop.isAfter(
+                    state.now.subtract(const Duration(minutes: 30)),
+                  ))
+                    programme,
+              ],
+              now: state.now,
+              use24: state.settings.use24HourTime,
+              allowInsecure: state.activeSource?.allowInsecureCerts ?? false,
+              canRecord: !isSyntheticChannel(_channel),
+              onRecord: _recordFromEpg,
+              onRecordSeries: (p) => _recordFromEpg(p, series: true),
+              onClose: _closeEpg,
+              bottomInset: inset,
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildScaffold(BuildContext context) {
     final state = context.watch<AppState>();
     final colors = context.mawjColors;
@@ -1557,34 +1632,42 @@ class _PlayerPageState extends State<PlayerPage> {
         final wide = constraints.maxWidth >= 900;
         final immersive = landscape || wide || _fullscreen;
 
+        final Widget base;
         if (immersive) {
-          return Scaffold(
+          base = Scaffold(
             backgroundColor: Colors.black,
             body: _videoLayer(state, immersive: true),
           );
-        }
-
-        return Scaffold(
-          backgroundColor: colors.base,
-          body: SafeArea(
-            child: Column(
-              children: <Widget>[
-                AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: _videoLayer(state, immersive: false),
-                ),
-                Expanded(child: PlayerInfoPanel(channel: _channel)),
-                PlayerChannelStrip(
-                  channels: _zapList(state),
-                  current: _channel,
-                  allowInsecure:
-                      state.activeSource?.allowInsecureCerts ?? false,
-                  onSelected: _switchTo,
-                ),
-                const SizedBox(height: 8),
-              ],
+        } else {
+          base = Scaffold(
+            backgroundColor: colors.base,
+            body: SafeArea(
+              child: Column(
+                children: <Widget>[
+                  AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: _videoLayer(state, immersive: false),
+                  ),
+                  Expanded(child: PlayerInfoPanel(channel: _channel)),
+                  PlayerChannelStrip(
+                    channels: _zapList(state),
+                    current: _channel,
+                    allowInsecure:
+                        state.activeSource?.allowInsecureCerts ?? false,
+                    onSelected: _switchTo,
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
             ),
-          ),
+          );
+        }
+        return Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            base,
+            if (_browserOpen || _epgOpen) _panels(state),
+          ],
         );
       },
     );
@@ -1616,24 +1699,39 @@ class _PlayerPageState extends State<PlayerPage> {
     final channels = props['audio-params/hr-channels'];
     final decoder = props['hwdec-current'];
     final source = state.sourceInfoFor(_channel);
-    final chips = <String>[
+    final sourceText = <String>[
       if (source?['network'] != null) source!['network']!,
       if (source?['mux'] != null) source!['mux']!,
       if (source?['provider'] != null) source!['provider']!,
-      for (final tag in _channel.tags.take(4)) '#$tag',
+    ].join(' · ');
+    final videoText = <String>[
       if (width > 0 && height > 0) '$width×$height',
       if (props['video-codec'] != null)
         props['video-codec']!.split(' ').first.toUpperCase(),
       if (fps != null && fps > 0) '${fps.round()} fps',
-      if (props['audio-codec-name'] != null)
-        <String>[
-          props['audio-codec-name']!.toUpperCase(),
-          if (channels != null && channels.isNotEmpty) channels,
-        ].join(' '),
-      if (decoder != null && decoder != 'no') decoder,
+    ].join(' · ');
+    final audioText = props['audio-codec-name'] == null
+        ? ''
+        : <String>[
+            props['audio-codec-name']!.toUpperCase(),
+            if (channels != null && channels.isNotEmpty) channels,
+          ].join(' ');
+    final rows = <StbInfoRow>[
+      if (_channel.tags.isNotEmpty)
+        StbInfoRow(Icons.sell_outlined, _channel.tags.take(4).join(', ')),
+      if (sourceText.isNotEmpty)
+        StbInfoRow(Icons.settings_input_antenna_rounded, sourceText),
+      if (videoText.isNotEmpty) StbInfoRow(Icons.videocam_outlined, videoText),
+      if (audioText.isNotEmpty)
+        StbInfoRow(Icons.volume_up_outlined, audioText),
+      if (decoder != null && decoder != 'no')
+        StbInfoRow(Icons.memory_rounded, decoder),
       if (props['frame-drop-count'] != null &&
           props['frame-drop-count'] != '0')
-        '${strings.infoDropped} ${props['frame-drop-count']}',
+        StbInfoRow(
+          Icons.warning_amber_rounded,
+          '${strings.infoDropped} ${props['frame-drop-count']}',
+        ),
     ];
 
     final clock = state.now;
@@ -1656,7 +1754,7 @@ class _PlayerPageState extends State<PlayerPage> {
         nowDescription: now?.description,
         nextTitle: next?.displayTitle,
         nextRange: next == null ? null : range(next),
-        chips: chips,
+        rows: rows,
         signal: SignalBadge(channel: _channel, meter: true),
         recording: _localRecording || state.activeRecordingFor(_channel) != null,
         pinned: _infoPinned,
@@ -1766,40 +1864,6 @@ class _PlayerPageState extends State<PlayerPage> {
                       padding: EdgeInsetsDirectional.only(top: 76, end: 20),
                       child: IgnorePointer(child: StbRecBadge()),
                     ),
-                  ),
-                if (_browserOpen)
-                  StbChannelBrowser(
-                    channels: state.channels,
-                    favorites: state.favorites,
-                    groups: state.groups,
-                    initialGroup: state.groupFilter,
-                    current: _channel,
-                    now: state.now,
-                    nowFor: (channel) => state.epg.nowFor(channel, state.now),
-                    allowInsecure:
-                        state.activeSource?.allowInsecureCerts ?? false,
-                    onTune: _tuneFromBrowser,
-                    onGroupChanged: state.setGroupFilter,
-                    onClose: _closeBrowser,
-                  ),
-                if (_epgOpen)
-                  StbEpgPanel(
-                    channel: _channel,
-                    programmes: <Programme>[
-                      for (final programme in state.epg.programmesFor(_channel))
-                        if (programme.stop.isAfter(
-                          state.now.subtract(const Duration(minutes: 30)),
-                        ))
-                          programme,
-                    ],
-                    now: state.now,
-                    use24: state.settings.use24HourTime,
-                    allowInsecure:
-                        state.activeSource?.allowInsecureCerts ?? false,
-                    canRecord: !isSyntheticChannel(_channel),
-                    onRecord: _recordFromEpg,
-                    onRecordSeries: (p) => _recordFromEpg(p, series: true),
-                    onClose: _closeEpg,
                   ),
                 if (_helpOpen) StbHelpOverlay(onClose: _toggleHelp),
                 if (_osdKind != null)
@@ -1927,7 +1991,8 @@ class _PlayerPageState extends State<PlayerPage> {
       );
     }
 
-    final visible = _controlsVisible && !_browserOpen && !_helpOpen;
+    final visible =
+        (_controlsVisible || _browserOpen || _epgOpen) && !_helpOpen;
     final compact = MediaQuery.sizeOf(context).width < 980;
     return ExcludeFocus(
       child: IgnorePointer(
@@ -2178,249 +2243,274 @@ class _PlayerPageState extends State<PlayerPage> {
         child: Stack(
           fit: StackFit.expand,
           children: <Widget>[
-            // Top bar.
-            Align(
-              alignment: Alignment.topCenter,
-              child: DecoratedBox(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: <Color>[Color(0xCC000000), Color(0x00000000)],
-                  ),
-                ),
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    8 + padding.left,
-                    4 + padding.top,
-                    8 + padding.right,
-                    18,
-                  ),
-                  child: Row(
-                    children: <Widget>[
-                      _RoundButton(
-                        tooltip: strings.back,
-                        icon: Icons.arrow_back_rounded,
-                        onPressed: () {
-                          if (_fullscreen) {
-                            unawaited(_toggleFullscreen());
-                          } else {
-                            Navigator.of(context).maybePop();
-                          }
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            BidiText(
-                              _channel.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 16,
-                              ),
-                            ),
-                            Row(
-                              children: <Widget>[
-                                Text(
-                                  '${strings.channel} ${_channel.displayNumber}',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.65),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Flexible(child: SignalBadge(channel: _channel)),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      _RoundButton(
-                        tooltip: strings.stbChannels,
-                        icon: Icons.list_rounded,
-                        onPressed: _openBrowser,
-                      ),
-                      _RoundButton(
-                        tooltip: strings.stbEpg,
-                        icon: Icons.event_note_rounded,
-                        onPressed: _openEpg,
-                      ),
-                      if (Platform.isAndroid)
-                        _RoundButton(
-                          tooltip: strings.pipButton,
-                          icon: Icons.picture_in_picture_alt_rounded,
-                          onPressed: () => unawaited(PipService.enter()),
-                        ),
-                      if (constraints.maxWidth >= 560)
-                        _RoundButton(
-                          tooltip: strings.diagnostics,
-                          icon: Icons.monitor_heart_outlined,
-                          onPressed: () => unawaited(_showDiagnostics()),
-                        ),
-                      _RoundButton(
-                        tooltip: _fullscreen
-                            ? strings.exitFullScreen
-                            : strings.fullScreen,
-                        icon: _fullscreen
-                            ? Icons.fullscreen_exit_rounded
-                            : Icons.fullscreen_rounded,
-                        onPressed: () => unawaited(_toggleFullscreen()),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            // Centre transport.
-            Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  _RoundButton(
-                    tooltip: strings.previousChannel,
-                    icon: Icons.skip_previous_rounded,
-                    size: 36,
-                    onPressed: () => _zap(-1),
-                  ),
-                  const SizedBox(width: 18),
-                  _RoundButton(
-                    tooltip: _playing ? strings.pause : strings.play,
-                    icon: _playing
-                        ? Icons.pause_rounded
-                        : Icons.play_arrow_rounded,
-                    size: 52,
-                    filled: true,
-                    onPressed: () {
-                      unawaited(_player.playOrPause());
-                      _showControls();
-                    },
-                  ),
-                  const SizedBox(width: 18),
-                  _RoundButton(
-                    tooltip: strings.nextChannel,
-                    icon: Icons.skip_next_rounded,
-                    size: 36,
-                    onPressed: () => _zap(1),
-                  ),
-                ],
-              ),
-            ),
-            // Volume, bottom start.
-            PositionedDirectional(
-              bottom: 8 + padding.bottom + (showStrip ? 132 : 0),
-              start: 8 + padding.left,
-              child: StreamBuilder<double>(
-                stream: _player.stream.volume,
-                initialData: _player.state.volume,
-                builder: (context, snapshot) {
-                  final volume = snapshot.data ?? _player.state.volume;
-                  final muted = volume <= 0.01;
-                  return _RoundButton(
-                    tooltip: muted ? strings.unmute : strings.mute,
-                    icon: muted
-                        ? Icons.volume_off_rounded
-                        : Icons.volume_up_rounded,
-                    onPressed: _toggleMute,
-                  );
-                },
-              ),
-            ),
-            // Recording buttons, bottom end: the top bar is too crowded on a
-            // phone held upright.
-            PositionedDirectional(
-              bottom: 8 + padding.bottom + (showStrip ? 132 : 0),
-              end: 8 + padding.right,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  _RoundButton(
-                    tooltip: strings.audioAndSubtitles,
-                    icon: Icons.subtitles_rounded,
-                    onPressed: () => unawaited(showTrackSheet(context, _player)),
-                  ),
-                  const SizedBox(width: 8),
-                  _RoundButton(
-                    tooltip: favorite
-                        ? strings.removeFavorite
-                        : strings.addFavorite,
-                    icon: favorite
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded,
-                    color: favorite ? colors.accent : Colors.white,
-                    onPressed: () => unawaited(state.toggleFavorite(_channel)),
-                  ),
-                  if (!isSyntheticChannel(_channel)) ...<Widget>[
-                    const SizedBox(width: 8),
-                    RecordNowButton(channel: _channel),
-                    const SizedBox(width: 8),
-                    LocalRecordButton(
-                      recording: _localRecording,
-                      onPressed: () => unawaited(_toggleLocalRecording()),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (immersive)
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: DecoratedBox(
+            // The controls are laid out in rows (top bar, transport, action
+            // buttons, now playing and channel strip) so nothing can sit on
+            // top of anything else.
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                DecoratedBox(
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: <Color>[Color(0xE6000000), Color(0x00000000)],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: <Color>[Color(0xCC000000), Color(0x00000000)],
                     ),
                   ),
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(
-                      64 + padding.left,
-                      28,
-                      16 + padding.right,
-                      8 + padding.bottom,
+                      8 + padding.left,
+                      4 + padding.top,
+                      8 + padding.right,
+                      10,
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: <Widget>[
-                        if (current != null) ...<Widget>[
-                          BidiText(
-                            current.displayTitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                            ),
+                        _RoundButton(
+                          tooltip: strings.back,
+                          icon: Icons.arrow_back_rounded,
+                          onPressed: () {
+                            if (_fullscreen) {
+                              unawaited(_toggleFullscreen());
+                            } else {
+                              Navigator.of(context).maybePop();
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              BidiText(
+                                _channel.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              Row(
+                                children: <Widget>[
+                                  Text(
+                                    '${strings.channel} ${_channel.displayNumber}',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.65),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Flexible(child: SignalBadge(channel: _channel)),
+                                ],
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 2),
-                          WaveProgress(
-                            progress: current.progressAt(state.now),
-                            color: colors.accent,
-                            trackColor: Colors.white24,
-                            height: 16,
-                            animate: true,
+                        ),
+                        if (constraints.maxWidth >= 560)
+                          _RoundButton(
+                            tooltip: strings.diagnostics,
+                            icon: Icons.monitor_heart_outlined,
+                            onPressed: () => unawaited(_showDiagnostics()),
                           ),
-                        ],
-                        if (showStrip)
-                          PlayerChannelStrip(
-                            channels: _zapList(state),
-                            current: _channel,
-                            allowInsecure: allowInsecure,
-                            onSelected: _switchTo,
-                            onDark: true,
-                          ),
+                        _RoundButton(
+                          tooltip: _fullscreen
+                              ? strings.exitFullScreen
+                              : strings.fullScreen,
+                          icon: _fullscreen
+                              ? Icons.fullscreen_exit_rounded
+                              : Icons.fullscreen_rounded,
+                          onPressed: () => unawaited(_toggleFullscreen()),
+                        ),
                       ],
                     ),
                   ),
                 ),
-              ),
+                // Transport: shrinks to fit rather than overlapping.
+                Expanded(
+                  child: Center(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          _RoundButton(
+                            tooltip: strings.previousChannel,
+                            icon: Icons.skip_previous_rounded,
+                            size: 36,
+                            onPressed: () => _zap(-1),
+                          ),
+                          const SizedBox(width: 18),
+                          _RoundButton(
+                            tooltip: _playing ? strings.pause : strings.play,
+                            icon: _playing
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                            size: 52,
+                            filled: true,
+                            onPressed: () {
+                              unawaited(_player.playOrPause());
+                              _showControls();
+                            },
+                          ),
+                          const SizedBox(width: 18),
+                          _RoundButton(
+                            tooltip: strings.nextChannel,
+                            icon: Icons.skip_next_rounded,
+                            size: 36,
+                            onPressed: () => _zap(1),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // Action buttons: volume, channels, guide, tracks, favourite,
+                // recording, floating window.
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    8 + padding.left,
+                    0,
+                    8 + padding.right,
+                    immersive ? 0 : 4,
+                  ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minWidth: math.max(
+                          0.0,
+                          constraints.maxWidth - 16 - padding.left - padding.right,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: <Widget>[
+                          StreamBuilder<double>(
+                            stream: _player.stream.volume,
+                            initialData: _player.state.volume,
+                            builder: (context, snapshot) {
+                              final volume =
+                                  snapshot.data ?? _player.state.volume;
+                              final muted = volume <= 0.01;
+                              return _RoundButton(
+                                tooltip: muted ? strings.unmute : strings.mute,
+                                icon: muted
+                                    ? Icons.volume_off_rounded
+                                    : Icons.volume_up_rounded,
+                                onPressed: _toggleMute,
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          _RoundButton(
+                            tooltip: strings.stbChannels,
+                            icon: Icons.list_rounded,
+                            onPressed: _openBrowser,
+                          ),
+                          const SizedBox(width: 8),
+                          _RoundButton(
+                            tooltip: strings.stbEpg,
+                            icon: Icons.event_note_rounded,
+                            onPressed: _openEpg,
+                          ),
+                          const SizedBox(width: 8),
+                          _RoundButton(
+                            tooltip: strings.audioAndSubtitles,
+                            icon: Icons.subtitles_rounded,
+                            onPressed: () =>
+                                unawaited(showTrackSheet(context, _player)),
+                          ),
+                          const SizedBox(width: 8),
+                          _RoundButton(
+                            tooltip: favorite
+                                ? strings.removeFavorite
+                                : strings.addFavorite,
+                            icon: favorite
+                                ? Icons.star_rounded
+                                : Icons.star_outline_rounded,
+                            color: favorite ? colors.accent : Colors.white,
+                            onPressed: () =>
+                                unawaited(state.toggleFavorite(_channel)),
+                          ),
+                          if (!isSyntheticChannel(_channel)) ...<Widget>[
+                            const SizedBox(width: 8),
+                            RecordNowButton(channel: _channel),
+                            const SizedBox(width: 8),
+                            LocalRecordButton(
+                              recording: _localRecording,
+                              onPressed: () =>
+                                  unawaited(_toggleLocalRecording()),
+                            ),
+                          ],
+                          if (Platform.isAndroid) ...<Widget>[
+                            const SizedBox(width: 8),
+                            _RoundButton(
+                              tooltip: strings.pipButton,
+                              icon: Icons.picture_in_picture_alt_rounded,
+                              onPressed: () => unawaited(PipService.enter()),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                if (immersive)
+                  DecoratedBox(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: <Color>[Color(0xE6000000), Color(0x00000000)],
+                      ),
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        16 + padding.left,
+                        12,
+                        16 + padding.right,
+                        8 + padding.bottom,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          if (current != null) ...<Widget>[
+                            BidiText(
+                              current.displayTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            WaveProgress(
+                              progress: current.progressAt(state.now),
+                              color: colors.accent,
+                              trackColor: Colors.white24,
+                              height: 16,
+                              animate: true,
+                            ),
+                          ],
+                          if (showStrip)
+                            PlayerChannelStrip(
+                              channels: _zapList(state),
+                              current: _channel,
+                              allowInsecure: allowInsecure,
+                              onSelected: _switchTo,
+                              onDark: true,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ],
         ),
       ),

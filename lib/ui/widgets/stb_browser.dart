@@ -29,7 +29,11 @@ class StbChannelBrowser extends StatefulWidget {
     required this.onTune,
     required this.onGroupChanged,
     required this.onClose,
+    this.bottomInset = 0,
   });
+
+  /// Space kept free at the bottom (the desktop control bar).
+  final double bottomInset;
 
   final List<Channel> channels;
   final List<Channel> favorites;
@@ -306,7 +310,13 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
     final size = MediaQuery.sizeOf(context);
     // Phones get a sheet from the bottom and a real search box; desktop gets
     // the side panel driven by keys.
+    final pad = MediaQuery.paddingOf(context);
     final compact = size.width < 720;
+    // A phone on its side: a full-height strip with a slim header.
+    final short = !compact && size.height < 520;
+    final inset = short
+        ? 0.0
+        : widget.bottomInset.clamp(0.0, size.height * 0.25).toDouble();
     return Focus(
       focusNode: _focus,
       onKeyEvent: compact ? null : _onKey,
@@ -314,6 +324,7 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
         fit: StackFit.expand,
         children: <Widget>[
           Positioned.fill(
+            bottom: inset,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: widget.onClose,
@@ -333,16 +344,25 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
                 ? Alignment.bottomCenter
                 : AlignmentDirectional.centerStart,
             child: Container(
-              width: compact ? double.infinity : 500,
+              width: compact ? double.infinity : (short ? 440 : 500),
               height: compact ? size.height * 0.78 : null,
               margin: compact
-                  ? const EdgeInsets.fromLTRB(8, 0, 8, 8)
-                  : const EdgeInsets.fromLTRB(20, 56, 20, 20),
+                  ? EdgeInsets.fromLTRB(8, 0, 8, 8 + pad.bottom)
+                  : short
+                      ? EdgeInsets.fromLTRB(
+                          8 + pad.left,
+                          8 + pad.top,
+                          8,
+                          8 + pad.bottom,
+                        )
+                      : EdgeInsets.fromLTRB(20, 56, 20, 20 + inset),
               decoration: stbPanelDecoration(colors.accent),
               child: Column(
                 children: <Widget>[
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 10, 6),
+                    padding: short
+                        ? const EdgeInsets.fromLTRB(14, 2, 4, 0)
+                        : const EdgeInsets.fromLTRB(20, 16, 10, 6),
                     child: Row(
                       children: <Widget>[
                         Icon(Icons.live_tv_rounded, color: colors.accent, size: 22),
