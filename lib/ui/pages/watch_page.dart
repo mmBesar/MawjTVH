@@ -16,7 +16,6 @@ import '../widgets/channel_art.dart';
 import '../widgets/channel_logo.dart';
 import '../widgets/channel_row.dart';
 import '../widgets/channel_tile.dart';
-import '../widgets/wheel_scroll.dart';
 import '../widgets/channel_views.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_banner.dart';
@@ -24,6 +23,7 @@ import '../widgets/media_filter.dart';
 import '../widgets/source_switcher.dart';
 import '../widgets/warnings_panel.dart';
 import '../widgets/wave.dart';
+import '../widgets/wheel_scroll.dart';
 import 'channel_guide_page.dart';
 import 'search_page.dart';
 
