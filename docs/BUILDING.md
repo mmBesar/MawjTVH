@@ -230,7 +230,7 @@ not signed a second time (it is signed inside the Android job of `Build`).
 
 3. The `Release` workflow finds the green build for the tagged commit,
    downloads its files, adds `SHA256SUMS` and creates the GitHub release
-   (versions starting with `v0.` are marked as pre-releases).
+   (marked "latest"; a tag with a suffix such as `v0.2.0-beta1` is marked as a pre-release instead).
 
 If no green build exists for the commit, or its files have expired (90 days),
 `Release` stops with a message; run `Build` again first. From the Actions tab
