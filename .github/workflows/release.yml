@@ -1,0 +1,97 @@
+name: Release
+
+# Publishes a release from the build that already ran for the tagged commit.
+# Nothing is rebuilt: the APK was signed in that build, and the Linux bundles
+# were packaged there. Tagging therefore takes seconds.
+#
+#   git tag -a v0.1.7 -m "MawjTVH 0.1.7" && git push origin v0.1.7
+#
+# The tagged commit must be one the Build workflow finished successfully on
+# (a push to main). Artifacts are kept for the repository's retention period
+# (90 days by default); after that, run Build again first.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (for example v0.1.7)"
+        required: true
+      run_id:
+        description: "Build run to take the files from (optional; default: the successful run for the tag's commit)"
+        required: false
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Find the build for this commit
+        id: build
+        run: |
+          set -euo pipefail
+          sha="$(git rev-list -n1 "$TAG")"
+          run_id="${{ github.event.inputs.run_id }}"
+          if [[ -z "$run_id" ]]; then
+            run_id="$(gh run list --workflow build.yml --commit "$sha" \
+              --status success --limit 1 --json databaseId \
+              --jq '.[0].databaseId // empty')"
+          fi
+          if [[ -z "$run_id" ]]; then
+            echo "::error::No successful Build run for commit $sha. Push the commit to main and wait for a green build, then tag it."
+            exit 1
+          fi
+          echo "Using Build run $run_id for $TAG ($sha)"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download the build files
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          gh run download "${{ steps.build.outputs.run_id }}" --dir release-raw
+          find release-raw -type f -exec mv -t release {} +
+          ls -l release
+
+      - name: Check the files
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          ls release/MawjTVH-"$version"-arm64-v8a.apk >/dev/null || {
+            echo "::error::The build has no APK for version $version. Does pubspec.yaml match the tag?"
+            exit 1
+          }
+
+      - name: Write checksums
+        run: |
+          cd release
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\n' \
+            | sort | xargs -r sha256sum > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create GitHub release
+        run: |
+          set -euo pipefail
+          prerelease=()
+          if [[ "$TAG" == *-* || "$TAG" == v0.* ]]; then
+            prerelease=(--prerelease)
+          fi
+          gh release create "$TAG" release/* \
+            --title "$TAG" --generate-notes --verify-tag "${prerelease[@]}"

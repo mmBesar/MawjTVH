@@ -214,3 +214,25 @@ commit the lockfile from a machine that has the pinned SDK.
 - **Android build fails on SDK licenses** — run
   `flutter doctor --android-licenses` locally, or add the license acceptance
   step to your own CI.
+
+## Releasing
+
+Releases reuse the build that already ran, so nothing is rebuilt and the APK is
+not signed a second time (it is signed inside the Android job of `Build`).
+
+1. Bump `version` in `pubspec.yaml` (and `kAppVersion`), update `CHANGELOG.md`,
+   push to `main`, and wait for the `Build` workflow to go green.
+2. Tag that same commit and push the tag:
+
+   ```bash
+   git tag -a v0.1.7 -m "MawjTVH 0.1.7" && git push origin v0.1.7
+   ```
+
+3. The `Release` workflow finds the green build for the tagged commit,
+   downloads its files, adds `SHA256SUMS` and creates the GitHub release
+   (versions starting with `v0.` are marked as pre-releases).
+
+If no green build exists for the commit, or its files have expired (90 days),
+`Release` stops with a message; run `Build` again first. From the Actions tab
+you can also start `Release` by hand with a tag and, optionally, a specific
+build run id.

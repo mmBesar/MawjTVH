@@ -2,6 +2,7 @@
 
 ## 0.1.7
 
+- Releases no longer rebuild everything: pushing a tag runs a separate `Release` workflow that publishes the files from the green build of that commit (see docs/BUILDING.md).
 - The channel browser and guide panels no longer dim the picture, are as tall as the window allows (down to the control bar on desktop) and adjust to small windows.
 - The About text and package description say what MawjTVH is: an unofficial Tvheadend client, a personal project still in development.
 - New README with badges and disclaimers.
