@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -313,10 +314,14 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
     final pad = MediaQuery.paddingOf(context);
     final compact = size.width < 720;
     // A phone on its side: a full-height strip with a slim header.
-    final short = !compact && size.height < 520;
+    final desktop = widget.bottomInset > 0;
+    final short = !compact && !desktop && size.height < 520;
     final inset = short
         ? 0.0
         : widget.bottomInset.clamp(0.0, size.height * 0.25).toDouble();
+    // As tall as the window allows, down to the control bar.
+    final tallMargin = EdgeInsets.fromLTRB(20, 16, 20, 16 + inset);
+    final tallHeight = math.max(200.0, size.height - tallMargin.vertical);
     return Focus(
       focusNode: _focus,
       onKeyEvent: compact ? null : _onKey,
@@ -328,15 +333,9 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: widget.onClose,
-              child: const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: AlignmentDirectional.centerStart,
-                    end: AlignmentDirectional.centerEnd,
-                    colors: <Color>[Color(0xB3000000), Color(0x00000000)],
-                  ),
-                ),
-              ),
+              // No dimming: the picture stays clear. The area is only there so
+              // a click outside the panel closes it.
+              child: const ColoredBox(color: Colors.transparent),
             ),
           ),
           Align(
@@ -345,7 +344,9 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
                 : AlignmentDirectional.centerStart,
             child: Container(
               width: compact ? double.infinity : (short ? 440 : 500),
-              height: compact ? size.height * 0.78 : null,
+              height: compact
+                  ? size.height * 0.78
+                  : (short ? null : tallHeight),
               margin: compact
                   ? EdgeInsets.fromLTRB(8, 0, 8, 8 + pad.bottom)
                   : short
@@ -355,7 +356,7 @@ class _StbChannelBrowserState extends State<StbChannelBrowser> {
                           8,
                           8 + pad.bottom,
                         )
-                      : EdgeInsets.fromLTRB(20, 56, 20, 20 + inset),
+                      : tallMargin,
               decoration: stbPanelDecoration(colors.accent),
               child: Column(
                 children: <Widget>[

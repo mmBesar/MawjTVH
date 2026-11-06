@@ -172,8 +172,8 @@ class AppStrings {
   String get viewLicenses => isArabic ? 'عرض تراخيص المصادر المفتوحة' : 'View open-source licenses';
   String get projectPage => isArabic ? 'صفحة المشروع' : 'Project page';
   String get aboutBody => isArabic
-      ? 'MawjTVH مشغّل IPTV حر ومفتوح المصدر لـ Android وLinux، مع دعم كامل للنصوص العربية والإنجليزية.'
-      : 'MawjTVH is a free, open-source IPTV client for Android and Linux with first-class Arabic and English text support.';
+      ? 'MawjTVH عميل حر ومفتوح المصدر لخادم Tvheadend على Android وLinux، يعمل بالبروتوكول الأصلي HTSP، مع دعم كامل للنصوص العربية والإنجليزية. مشروع شخصي غير رسمي وما زال قيد التطوير، وليس تابعًا لمشروع Tvheadend.'
+      : 'MawjTVH is a free, open-source Tvheadend client for Android and Linux. It speaks Tvheadend\'s native HTSP protocol and has first-class Arabic and English text support. A personal project, unofficial and still in development; it is not affiliated with the Tvheadend project.';
   String get appearanceSystem => isArabic ? 'النظام' : 'System';
   String get systemThemeHelp => isArabic
       ? 'تتبع السمة ألوان النظام. على Android تُستخدم الألوان الديناميكية عند توفرها.'

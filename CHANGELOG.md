@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.7
+
+- The channel browser and guide panels no longer dim the picture, are as tall as the window allows (down to the control bar on desktop) and adjust to small windows.
+- The About text and package description say what MawjTVH is: an unofficial Tvheadend client, a personal project still in development.
+- New README with badges and disclaimers.
+
 ## 0.1.6
 
 - Packaging: the Linux build no longer fails at random on a broken pipe.

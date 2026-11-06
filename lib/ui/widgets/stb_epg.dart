@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -162,10 +163,14 @@ class _StbEpgPanelState extends State<StbEpgPanel> {
     final pad = MediaQuery.paddingOf(context);
     final compact = size.width < 720;
     // A phone on its side: full height, programmes and details side by side.
-    final short = !compact && size.height < 520;
+    final desktop = widget.bottomInset > 0;
+    final short = !compact && !desktop && size.height < 520;
     final inset = short
         ? 0.0
         : widget.bottomInset.clamp(0.0, size.height * 0.25).toDouble();
+    // As tall as the window allows, down to the control bar.
+    final tallMargin = EdgeInsets.fromLTRB(20, 16, 20, 16 + inset);
+    final tallHeight = math.max(200.0, size.height - tallMargin.vertical);
     final programme = _current;
 
     final programmeList = widget.programmes.isEmpty
@@ -206,7 +211,9 @@ class _StbEpgPanelState extends State<StbEpgPanel> {
       width: compact
           ? double.infinity
           : (short ? (size.width * 0.82).clamp(560.0, 920.0).toDouble() : 560),
-      height: compact ? size.height * 0.78 : null,
+      height: compact
+          ? size.height * 0.78
+          : (short ? null : tallHeight),
       margin: compact
           ? EdgeInsets.fromLTRB(8, 0, 8, 8 + pad.bottom)
           : short
@@ -216,7 +223,7 @@ class _StbEpgPanelState extends State<StbEpgPanel> {
                   8 + pad.right,
                   8 + pad.bottom,
                 )
-              : EdgeInsets.fromLTRB(20, 56, 20, 20 + inset),
+              : tallMargin,
       decoration: stbPanelDecoration(colors.accent),
       child: Column(
         children: <Widget>[
@@ -311,7 +318,7 @@ class _StbEpgPanelState extends State<StbEpgPanel> {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: widget.onClose,
-              child: const ColoredBox(color: Color(0x59000000)),
+              child: const ColoredBox(color: Colors.transparent),
             ),
           ),
           Align(

@@ -7,6 +7,7 @@
   <summary>A Tvheadend client with guide, recordings and signal info</summary>
   <description>
     <p>MawjTVH watches live TV from a Tvheadend server, browses its programme guide, schedules and plays recordings, and can record a channel to the device you are watching on.</p>
+    <p>A personal, unofficial project that is still in development. It is not affiliated with the Tvheadend project.</p>
   </description>
   <launchable type="desktop-id">mawjtvh.desktop</launchable>
   <url type="homepage">https://github.com/mmBesar/MawjTVH</url>

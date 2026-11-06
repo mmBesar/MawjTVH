@@ -21,7 +21,7 @@ BoxDecoration _panel(Color accent) => BoxDecoration(
       borderRadius: BorderRadius.circular(22),
       border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
       boxShadow: const <BoxShadow>[
-        BoxShadow(color: Color(0x66000000), blurRadius: 24, offset: Offset(0, 8)),
+        BoxShadow(color: Color(0x40000000), blurRadius: 10, offset: Offset(0, 3)),
       ],
     );
 
