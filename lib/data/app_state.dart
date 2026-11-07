@@ -56,6 +56,7 @@ class AppState extends ChangeNotifier {
   List<String> _favorites = <String>[];
   List<String> _recents = <String>[];
   Map<String, String> _tracks = <String, String>{};
+  Map<String, int> _resume = <String, int>{};
   Map<String, Channel> _channelById = const <String, Channel>{};
   List<String> _groups = const <String>[];
   String? _groupFilter;
@@ -264,6 +265,7 @@ class AppState extends ChangeNotifier {
     _favorites = id == null ? <String>[] : _storage.loadFavorites(id);
     _recents = id == null ? <String>[] : _storage.loadRecents(id);
     _tracks = id == null ? <String, String>{} : _storage.loadTracks(id);
+    _resume = id == null ? <String, int>{} : _storage.loadResume(id);
   }
 
   void _indexChannels(List<Channel> channels) {
@@ -632,6 +634,72 @@ class AppState extends ChangeNotifier {
   /// The audio (or subtitle) choice last made on [channel], as a track key.
   String? rememberedTrack(Channel channel, {required bool audio}) =>
       _tracks['${channel.id}.${audio ? 'a' : 's'}'];
+
+  // ---- Resume ---------------------------------------------------------------
+
+  /// Key of a recording in the local resume map.
+  static String _resumeKeyOf(Channel channel) =>
+      channel.id.substring(kRecordingIdPrefix.length);
+
+  /// Where to offer to continue [channel] (a recording), or null.
+  Duration? resumeFor(Channel channel) {
+    if (!isSyntheticChannel(channel)) {
+      return null;
+    }
+    final key = _resumeKeyOf(channel);
+    var seconds = 0;
+    for (final recording in _recordings) {
+      if (recording.uuid == key) {
+        seconds = recording.playPosition;
+        break;
+      }
+    }
+    if (seconds <= 0) {
+      seconds = _resume[key] ?? 0;
+    }
+    return seconds > 0 ? Duration(seconds: seconds) : null;
+  }
+
+  /// Remembers where playback of [channel] stopped. Near the start nothing
+  /// changes (so an unaccepted offer survives); near the end the recording
+  /// counts as watched and the position is cleared.
+  void savePosition(Channel channel, Duration position, Duration total) {
+    if (!isSyntheticChannel(channel) || position < const Duration(seconds: 30)) {
+      return;
+    }
+    var seconds = position.inSeconds;
+    if (total > Duration.zero &&
+        (total - position < const Duration(seconds: 60) ||
+            position.inSeconds >= total.inSeconds * 0.95)) {
+      seconds = 0;
+    }
+    final key = _resumeKeyOf(channel);
+    final htsp = _htsp;
+    if (htsp != null &&
+        !htsp.isClosed &&
+        !key.startsWith('local:') &&
+        _recordings.any((recording) => recording.uuid == key)) {
+      unawaited(() async {
+        try {
+          await htsp.setPlayPosition(key, seconds);
+          _recordings = htsp.recordings();
+          notifyListeners();
+        } catch (error) {
+          debugPrint('Could not save the play position: $error');
+        }
+      }());
+      return;
+    }
+    if (seconds == 0) {
+      _resume.remove(key);
+    } else {
+      _resume[key] = seconds;
+      if (_resume.length > 400) {
+        _resume.remove(_resume.keys.first);
+      }
+    }
+    unawaited(_storage.saveResume(channel.sourceId, _resume));
+  }
 
   void rememberTrack(Channel channel, {required bool audio, required String key}) {
     if (isSyntheticChannel(channel)) {

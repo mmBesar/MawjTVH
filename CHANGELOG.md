@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.13
+
+- Resume: a recording remembers where you stopped. The next time you play it, a prompt offers "Continue from 12:34" or "Start over" for a few seconds. The position is saved every 15 seconds and when you leave; stopping in the first 30 seconds keeps the earlier position, and finishing (or the last minute) clears it.
+- Over HTSP the position is stored on the Tvheadend server with the recording (`playposition`), so every client of the account that uses it, such as other MawjTVH devices or Kodi, shares it. Local files, and sources used over HTTP only, keep it on this device.
+- Not yet in the external mpv window.
+
 ## 0.1.12
 
 - Fixed: a recording kept playing sound after Back, with no picture, until the app was killed. Leaving a recording asked the local stream proxy to cut its connections, and that step failed once the file was streaming (Dart cannot detach a response that has started); the error aborted the player page's clean-up before the player was stopped. The proxy now closes the connections properly, the player is stopped first, and a failure in the release step can no longer skip it. The same applies to the external mpv window page. This also stops the lingering server connections seen after leaving a recording.

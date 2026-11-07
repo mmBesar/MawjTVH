@@ -56,7 +56,7 @@ class HtspConnection {
     String username = '',
     String password = '',
     String clientName = 'MawjTVH',
-    String clientVersion = '0.1.12',
+    String clientVersion = '0.1.13',
     Duration timeout = const Duration(seconds: 12),
   }) async {
     final Socket socket;

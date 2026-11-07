@@ -13,6 +13,7 @@ class StorageService {
   static const String _favoritesKey = 'mawjtvh.favorites.v1';
   static const String _recentsKey = 'mawjtvh.recents.v1';
   static const String _tracksKey = 'mawjtvh.tracks.v1';
+  static const String _resumeKey = 'mawjtvh.resume.v1';
 
   final SharedPreferences _prefs;
 
@@ -129,6 +130,48 @@ class StorageService {
     }
     all[sourceId] = tracks;
     return _prefs.setString(_tracksKey, jsonEncode(all));
+  }
+
+  /// Where playback stopped, in seconds, for recordings the server cannot
+  /// remember (local files, or a source used over HTTP only).
+  Map<String, int> loadResume(String sourceId) {
+    final raw = _prefs.getString(_resumeKey);
+    if (raw == null || raw.isEmpty) {
+      return <String, int>{};
+    }
+    try {
+      final json = jsonDecode(raw);
+      if (json is Map) {
+        final map = json[sourceId];
+        if (map is Map) {
+          return <String, int>{
+            for (final entry in map.entries)
+              if (entry.key is String && entry.value is int)
+                entry.key as String: entry.value as int,
+          };
+        }
+      }
+    } catch (_) {
+      // A damaged map must not stop the app from starting.
+    }
+    return <String, int>{};
+  }
+
+  Future<void> saveResume(String sourceId, Map<String, int> positions) {
+    Map<String, dynamic> all = <String, dynamic>{};
+    final raw = _prefs.getString(_resumeKey);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final json = jsonDecode(raw);
+        if (json is Map) {
+          all = json.cast<String, dynamic>();
+        }
+      } catch (_) {
+        all = <String, dynamic>{};
+      }
+    }
+    all[sourceId] = positions;
+    return _prefs.setString(_resumeKey, jsonEncode(all));
   }
 
   List<String> _loadIdList(String key, String sourceId) {

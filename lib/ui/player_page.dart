@@ -200,6 +200,12 @@ class _PlayerPageState extends State<PlayerPage> {
   late AppState _appState;
   bool _infoVisible = false;
   Timer? _infoTimer;
+
+  // Resume: where a recording stopped last time, offered for a few seconds.
+  Duration? _resumeOffer;
+  bool _offered = false;
+  Timer? _offerTimer;
+  Timer? _positionTimer;
   Map<String, String> _infoProps = const <String, String>{};
   double _osdValue = 0;
 
@@ -309,6 +315,56 @@ class _PlayerPageState extends State<PlayerPage> {
     unawaited(_initializeBrightness());
     unawaited(_open());
     _scheduleHide();
+    _positionTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _rememberPosition(),
+    );
+  }
+
+  /// Keeps where a recording has got to, so it can be resumed later.
+  void _rememberPosition() {
+    if (!_isVod || !_playing) {
+      return;
+    }
+    try {
+      _appState.savePosition(
+        _channel,
+        _player.state.position,
+        _player.state.duration,
+      );
+    } catch (error) {
+      debugPrint('Could not remember the position: $error');
+    }
+  }
+
+  void _offerResume() {
+    if (_offered || !_isVod || !mounted) {
+      return;
+    }
+    _offered = true;
+    final at = _appState.resumeFor(_channel);
+    if (at == null) {
+      return;
+    }
+    setState(() => _resumeOffer = at);
+    _offerTimer?.cancel();
+    _offerTimer = Timer(const Duration(seconds: 12), _dismissOffer);
+  }
+
+  void _dismissOffer() {
+    _offerTimer?.cancel();
+    if (mounted && _resumeOffer != null) {
+      setState(() => _resumeOffer = null);
+    }
+  }
+
+  void _acceptResume() {
+    final at = _resumeOffer;
+    _dismissOffer();
+    if (at != null) {
+      unawaited(_player.seek(at));
+      _showControls();
+    }
   }
 
   void _onLog(PlayerLog log) {
@@ -404,6 +460,7 @@ class _PlayerPageState extends State<PlayerPage> {
       }
       if (mounted) {
         setState(() => _buffering = false);
+        _offerResume();
       }
     } catch (error) {
       if (mounted) {
@@ -1481,6 +1538,19 @@ class _PlayerPageState extends State<PlayerPage> {
   void dispose() {
     // Silence first, before anything else that could throw: stopping ends
     // playback at once, even if the player takes a while to shut down.
+    _positionTimer?.cancel();
+    _offerTimer?.cancel();
+    if (_isVod) {
+      try {
+        _appState.savePosition(
+          _channel,
+          _player.state.position,
+          _player.state.duration,
+        );
+      } catch (error) {
+        debugPrint('Could not remember the position: $error');
+      }
+    }
     final leaving = _channel;
     final appState = _appState;
     void release() {
@@ -1962,6 +2032,7 @@ class _PlayerPageState extends State<PlayerPage> {
                   ),
                 if (problem) _buildProblem(strings),
                 _buildControls(state, immersive: immersive, constraints: constraints),
+                if (_resumeOffer != null) _buildResumeOffer(strings),
                 if (_infoVisible && _osdKind == null && !_browserOpen && !_epgOpen)
                   _infoBanner(state),
                 if (kIsDesktop &&
@@ -1992,6 +2063,51 @@ class _PlayerPageState extends State<PlayerPage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildResumeOffer(AppStrings strings) {
+    final at = _resumeOffer!;
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: _isDesktop ? 170 : 190, left: 16, right: 16),
+        child: Material(
+          color: Colors.black.withValues(alpha: 0.82),
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(16, 6, 8, 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Icon(Icons.history_rounded, color: Colors.white70, size: 20),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    strings.resumeFrom(_formatClock(at)),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: _acceptResume,
+                  child: Text(strings.resumeAction),
+                ),
+                TextButton(
+                  onPressed: _dismissOffer,
+                  child: Text(
+                    strings.startOver,
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

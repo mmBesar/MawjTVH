@@ -421,6 +421,7 @@ class HtspBackend {
               ? 'completedError'
               : state,
           fileSize: size,
+          playPosition: _int(entry['playposition']) ?? 0,
           errors: error.isEmpty ? 0 : 1,
           imageSource: image.isEmpty
               ? null
@@ -585,6 +586,23 @@ class HtspBackend {
       'stop': now + minutes * 60,
       'title': title,
     });
+  }
+
+  /// Tells the server where playback of recording [id] stopped, in seconds.
+  /// Other clients of the same account (Kodi, other MawjTVH devices) see it.
+  Future<void> setPlayPosition(String id, int seconds) async {
+    final parsed = int.tryParse(id);
+    if (parsed == null) {
+      return;
+    }
+    await _connection.request('updateDvrEntry', <String, Object?>{
+      'id': parsed,
+      'playposition': seconds,
+    });
+    final entry = _dvr[parsed];
+    if (entry != null) {
+      entry['playposition'] = seconds;
+    }
   }
 
   Future<void> stopRecording(String id) => _byId('stopDvrEntry', id);

@@ -205,6 +205,10 @@ extension TvhStrings on AppStrings {
   String get onWord => isArabic ? 'تشغيل' : 'On';
   String get offWord => isArabic ? 'إيقاف' : 'Off';
   String get audioDelayLabel => isArabic ? 'تأخير الصوت' : 'Audio delay';
+  String resumeFrom(String time) =>
+      isArabic ? 'المتابعة من $time' : 'Continue from $time';
+  String get resumeAction => isArabic ? 'متابعة' : 'Resume';
+  String get startOver => isArabic ? 'من البداية' : 'Start over';
   String get seekBack10 => isArabic ? 'رجوع ١٠ ثوانٍ' : 'Back 10 s';
   String get seekForward10 => isArabic ? 'تقدّم ١٠ ثوانٍ' : 'Forward 10 s';
   String get resetPictureLabel =>

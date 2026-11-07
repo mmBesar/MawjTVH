@@ -21,6 +21,7 @@ class TvhRecording {
     this.errors = 0,
     this.enabled = true,
     this.imageSource,
+    this.playPosition = 0,
   });
 
   final String uuid;
@@ -41,6 +42,10 @@ class TvhRecording {
   final int errors;
   final bool enabled;
   final String? imageSource;
+
+  /// Seconds into the file where playback last stopped (kept by the server
+  /// over HTSP, so every client of the account shares it).
+  final int playPosition;
 
   bool get isRecording => schedStatus == 'recording';
   bool get isScheduled => schedStatus == 'scheduled';
