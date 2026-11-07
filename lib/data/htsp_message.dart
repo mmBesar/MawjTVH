@@ -206,9 +206,7 @@ class Htsmsg {
           );
         case _bin:
         case _uuid:
-          value = Uint8List.fromList(
-            data.sublist(dataStart, dataStart + dataLength),
-          );
+          value = data.sublist(dataStart, dataStart + dataLength);
         case _dbl:
           if (dataLength != 8) {
             throw HtspFormatException('Double of $dataLength bytes');
@@ -227,33 +225,65 @@ class Htsmsg {
 }
 
 /// Cuts a byte stream into whole messages.
+///
+/// Received chunks are only collected until a whole message is there, and are
+/// then joined once, so a big message (a block of a recording) is copied one
+/// time however many pieces it arrives in.
 class HtspFramer {
-  final BytesBuilder _pending = BytesBuilder(copy: false);
+  final List<Uint8List> _parts = <Uint8List>[];
+  int _partsLength = 0;
   Uint8List _buffer = Uint8List(0);
+
+  /// Length of the body of the message being waited for, once known.
+  int? _frame;
 
   /// Adds received bytes; returns every message completed by them.
   List<Map<String, Object?>> add(List<int> chunk) {
     if (chunk.isNotEmpty) {
-      _pending
-        ..add(_buffer)
-        ..add(chunk);
-      _buffer = _pending.takeBytes();
+      _parts.add(chunk is Uint8List ? chunk : Uint8List.fromList(chunk));
+      _partsLength += chunk.length;
     }
     final messages = <Map<String, Object?>>[];
-    var offset = 0;
-    while (_buffer.length - offset >= 4) {
-      final length = ByteData.sublistView(_buffer, offset, offset + 4).getUint32(0);
-      if (length > Htsmsg.maxMessage) {
-        throw HtspFormatException('Message of $length bytes');
+    while (true) {
+      var frame = _frame;
+      if (frame == null) {
+        if (_buffer.length + _partsLength < 4) {
+          break;
+        }
+        _join();
+        frame = ByteData.sublistView(_buffer, 0, 4).getUint32(0);
+        if (frame > Htsmsg.maxMessage) {
+          throw HtspFormatException('Message of $frame bytes');
+        }
+        _frame = frame;
       }
-      if (_buffer.length - offset - 4 < length) {
+      if (_buffer.length + _partsLength < 4 + frame) {
         break;
       }
-      final body = Uint8List.sublistView(_buffer, offset + 4, offset + 4 + length);
-      messages.add(Htsmsg.decodeBody(body));
-      offset += 4 + length;
+      _join();
+      messages.add(
+        Htsmsg.decodeBody(Uint8List.sublistView(_buffer, 4, 4 + frame)),
+      );
+      _buffer = Uint8List.sublistView(_buffer, 4 + frame);
+      _frame = null;
     }
-    _buffer = offset == 0 ? _buffer : Uint8List.fromList(_buffer.sublist(offset));
     return messages;
+  }
+
+  /// Moves everything collected so far into [_buffer].
+  void _join() {
+    if (_parts.isEmpty) {
+      return;
+    }
+    final joined = Uint8List(_buffer.length + _partsLength);
+    joined.setRange(0, _buffer.length, _buffer);
+    var at = _buffer.length;
+    for (final part in _parts) {
+      joined.setRange(at, at + part.length, part);
+      at += part.length;
+    }
+    _parts.clear();
+    _partsLength = 0;
+    _buffer = joined;
   }
 }

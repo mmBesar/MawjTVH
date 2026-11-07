@@ -1450,6 +1450,12 @@ class _PlayerPageState extends State<PlayerPage> {
       ..writeln('Has video: $_hasVideo, stalled: $_stalled, '
           'buffering: $_buffering, playing: $_playing')
       ..writeln('Error: ${_error ?? '-'}');
+    if (_isVod) {
+      final stats = _appState.recordingStats;
+      if (stats != null && stats.isNotEmpty) {
+        buffer.writeln(stats);
+      }
+    }
 
     final platform = _player.platform;
     if (platform is NativePlayer) {
@@ -1466,6 +1472,14 @@ class _PlayerPageState extends State<PlayerPage> {
         'video-params/w',
         'video-params/h',
         'hwdec-current',
+        'video-params/pixelformat',
+        'estimated-vf-fps',
+        'container-fps',
+        'frame-drop-count',
+        'decoder-frame-drop-count',
+        'vo-delayed-frame-count',
+        'avsync',
+        'demuxer-cache-duration',
         'seeking',
         'eof-reached',
         'time-pos',

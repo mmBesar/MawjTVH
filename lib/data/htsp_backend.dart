@@ -101,6 +101,9 @@ class HtspBackend {
     });
   }
 
+  /// Speed figures of the last recording served, for the problem report.
+  String? get recordingStats => _proxy?.recordingStats;
+
   Future<void> close() async {
     _closed = true;
     _signalIdle?.cancel();

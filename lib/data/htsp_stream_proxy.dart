@@ -40,6 +40,9 @@ class HtspStreamProxy {
 
   HttpServer? _server;
   int _nextSubscription = 100;
+
+  /// How the last sizeable recording request went, for the problem report.
+  String recordingStats = '';
   final Map<int, _Feed> _feeds = <int, _Feed>{};
   final Map<int, _RecordingFile> _files = <int, _RecordingFile>{};
 
@@ -122,7 +125,7 @@ class HtspStreamProxy {
 const int _recordingChunk = 256 * 1024;
 
 /// How many chunks are requested ahead of the one being written.
-const int _recordingReadAhead = 8;
+const int _recordingReadAhead = 4;
 
 int? _number(Object? value) {
   if (value is int) {
@@ -317,6 +320,10 @@ Future<void> _serveRecording(
     // Reads run a few chunks ahead of what has been written, so the round
     // trip to the server (large over a VPN or the internet) does not limit
     // the speed.
+    final clock = Stopwatch()..start();
+    var sent = 0;
+    var slowestRead = 0;
+    var slowestWrite = 0;
     var position = start;
     var requested = start;
     final queue = <({Future<Map<String, Object?>> reply, int length})>[];
@@ -332,7 +339,9 @@ Future<void> _serveRecording(
       fill();
       while (queue.isNotEmpty) {
         final item = queue.removeAt(0);
+        final waitedFrom = clock.elapsedMilliseconds;
         final reply = await item.reply;
+        final waitedTo = clock.elapsedMilliseconds;
         final data = reply['data'];
         if (data is! Uint8List || data.isEmpty) {
           break;
@@ -347,6 +356,17 @@ Future<void> _serveRecording(
         fill();
         response.add(data);
         await response.flush();
+        final wroteTo = clock.elapsedMilliseconds;
+        sent += data.length;
+        slowestRead = math.max(slowestRead, waitedTo - waitedFrom);
+        slowestWrite = math.max(slowestWrite, wroteTo - waitedTo);
+        if (sent >= 1024 * 1024) {
+          proxy.recordingStats =
+              'Recording from the server: ${(sent / 1048576).toStringAsFixed(1)} MB '
+              'in ${(wroteTo / 1000).toStringAsFixed(1)} s, '
+              'slowest wait for the server $slowestRead ms, '
+              'slowest hand-over to the player $slowestWrite ms';
+        }
       }
     } finally {
       queue.clear();

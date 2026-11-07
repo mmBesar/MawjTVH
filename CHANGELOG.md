@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.16
+
+- HTSP messages are joined once when they are whole instead of being copied again for every piece that arrives; a block of a recording is now copied twice in total, not about five to thirty times. Reads ahead go back to four chunks.
+- The problem report (copy diagnostics) now also shows, for recordings, how fast the server delivered the file and the slowest waits, and mpv's dropped-frame, frame-rate, A/V sync and cache figures.
+
 ## 0.1.15
 
 - Resume is asked before the recording starts: a full-screen message ("Continue from 12:34", Resume / Start over) on both Linux and Android, instead of a small bar over the picture. Resume waits for the file to be known, jumps to the saved point, and then starts playing; before, the button could do nothing on desktop because the jump came too early.
