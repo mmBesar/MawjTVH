@@ -119,10 +119,19 @@ void main() {
       expect(opened, <String>['dvr/12']);
       expect(closed, isEmpty);
 
+      // A response that is still under way must not make leaving throw (it
+      // used to, which stopped the player page from ever closing its player).
+      final request = await client.getUrl(Uri.parse(url));
+      final response = await request.close();
+      final held = response.listen((_) {});
+      held.pause();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
       // Leaving the recording closes the file at once.
       proxy.releaseRecording(12);
       await Future<void>.delayed(const Duration(milliseconds: 200));
       expect(closed, <int>[7]);
+      await held.cancel();
     } finally {
       client.close(force: true);
       await proxy.close();

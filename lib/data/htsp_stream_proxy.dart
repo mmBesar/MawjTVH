@@ -355,11 +355,14 @@ void _endRecording(HtspStreamProxy proxy, int dvrId) {
     return;
   }
   for (final request in file.requests.toList()) {
-    request.response.detachSocket(writeHeaders: false).then<void>(
-          (socket) => socket.destroy(),
-          onError: (Object _) {},
-        );
+    // The response is already under way, so its socket cannot be detached
+    // (that throws). Closing it short of its length makes the HttpServer
+    // destroy the connection, which is what is wanted here.
+    try {
+      request.response.close().then<void>((_) {}, onError: (Object _) {});
+    } catch (_) {}
   }
+  file.requests.clear();
   _closeRecording(proxy, file);
 }
 

@@ -1479,6 +1479,29 @@ class _PlayerPageState extends State<PlayerPage> {
 
   @override
   void dispose() {
+    // Silence first, before anything else that could throw: stopping ends
+    // playback at once, even if the player takes a while to shut down.
+    final leaving = _channel;
+    final appState = _appState;
+    void release() {
+      try {
+        appState.releaseStream(leaving);
+      } catch (error) {
+        debugPrint('Could not release the stream: $error');
+      }
+    }
+
+    final player = _player;
+    unawaited(() async {
+      try {
+        await player.stop();
+      } catch (_) {}
+      try {
+        await player.dispose();
+      } catch (_) {}
+      release();
+    }());
+    release();
     _stallTimer?.cancel();
     _hideTimer?.cancel();
     _osdTimer?.cancel();
@@ -1518,21 +1541,6 @@ class _PlayerPageState extends State<PlayerPage> {
     );
     // Give the tuner back as soon as the player is gone, and once more after
     // the player has really closed its connection.
-    final leaving = _channel;
-    final appState = _appState;
-    appState.releaseStream(leaving);
-    // Silence first: stopping ends playback and closes the stream at once,
-    // even if the player takes a while to shut down.
-    final player = _player;
-    unawaited(() async {
-      try {
-        await player.stop();
-      } catch (_) {}
-      try {
-        await player.dispose();
-      } catch (_) {}
-      appState.releaseStream(leaving);
-    }());
     if (_isDesktop) {
       if (_fullscreen) {
         unawaited(_setNativeFullscreen(false));

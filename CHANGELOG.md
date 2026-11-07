@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.12
+
+- Fixed: a recording kept playing sound after Back, with no picture, until the app was killed. Leaving a recording asked the local stream proxy to cut its connections, and that step failed once the file was streaming (Dart cannot detach a response that has started); the error aborted the player page's clean-up before the player was stopped. The proxy now closes the connections properly, the player is stopped first, and a failure in the release step can no longer skip it. The same applies to the external mpv window page. This also stops the lingering server connections seen after leaving a recording.
+
 ## 0.1.11
 
 - Recordings can be seeked: a seek bar (tap or drag) with elapsed and total time, ±10 s buttons, and on a phone a horizontal swipe jumps ±30 s. Keyboard: Left/Right ±10 s, Shift+Left/Right ±60 s, PgUp/PgDn ±5 min, Up/Down volume. Live TV keeps zapping on those keys.

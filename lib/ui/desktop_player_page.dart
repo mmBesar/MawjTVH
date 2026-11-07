@@ -296,7 +296,11 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     _generation++;
     _decoderTimer?.cancel();
     _lifecycle?.dispose();
-    _appState.releaseStream(_channel);
+    try {
+      _appState.releaseStream(_channel);
+    } catch (error) {
+      debugPrint('Could not release the stream: $error');
+    }
     final recorder = _recorder;
     _recorder = null;
     if (recorder != null) {
