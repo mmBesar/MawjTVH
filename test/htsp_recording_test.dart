@@ -115,9 +115,14 @@ void main() {
       final beyond = await _get(client, url, range: 'bytes=700000-');
       expect(beyond.$1.statusCode, HttpStatus.requestedRangeNotSatisfiable);
 
+      // Five requests shared one open file on the server.
+      expect(opened, <String>['dvr/12']);
+      expect(closed, isEmpty);
+
+      // Leaving the recording closes the file at once.
+      proxy.releaseRecording(12);
       await Future<void>.delayed(const Duration(milliseconds: 200));
-      expect(opened.toSet(), <String>{'dvr/12'});
-      expect(closed, isNotEmpty);
+      expect(closed, <int>[7]);
     } finally {
       client.close(force: true);
       await proxy.close();

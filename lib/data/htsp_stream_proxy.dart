@@ -41,11 +41,14 @@ class HtspStreamProxy {
   HttpServer? _server;
   int _nextSubscription = 100;
   final Map<int, _Feed> _feeds = <int, _Feed>{};
+  final Map<int, _RecordingFile> _files = <int, _RecordingFile>{};
 
   /// Binds the loopback server. Throws if it cannot.
   Future<void> start() async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     _server = server;
+    // Idle connections are dropped quickly, so none is left behind.
+    server.idleTimeout = const Duration(seconds: 10);
     server.listen(_handle, onError: (Object _) {});
   }
 
@@ -53,6 +56,9 @@ class HtspStreamProxy {
 
   /// Ends the subscription for [channelId] now and frees its tuner.
   void release(int channelId) => _feeds[channelId]?.stop();
+
+  /// Ends the connections to a recording and closes its file on the server.
+  void releaseRecording(int dvrId) => _endRecording(this, dvrId);
 
   /// True while a player is watching [channelId] through this proxy.
   bool isActive(int channelId) => _feeds.containsKey(channelId);
@@ -70,6 +76,9 @@ class HtspStreamProxy {
     for (final feed in _feeds.values.toList()) {
       feed.stop();
     }
+    for (final id in _files.keys.toList()) {
+      _endRecording(this, id);
+    }
     await server?.close(force: true);
   }
 
@@ -78,7 +87,7 @@ class HtspStreamProxy {
     if (parts.length == 2 && parts.first == 'dvr') {
       final dvrId = int.tryParse(parts[1]);
       if (dvrId != null) {
-        await _serveRecording(_connection, request, dvrId);
+        await _serveRecording(this, request, dvrId);
         return;
       }
     }
@@ -113,140 +122,246 @@ class HtspStreamProxy {
 const int _recordingChunk = 256 * 1024;
 
 int? _number(Object? value) {
-    if (value is int) {
-      return value;
-    }
-    return value == null ? null : int.tryParse('$value');
+  if (value is int) {
+    return value;
   }
+  return value == null ? null : int.tryParse('$value');
+}
 
-  /// Serves a recording's file to the player, with byte ranges so it can seek.
-  /// The file is read from the server with HTSP, so an account needs no web
-  /// interface permission, only the right to watch recordings.
+/// One recording file opened on the server. Every player connection that asks
+/// for the same recording shares this single handle, so the server sees one
+/// open file however many HTTP connections the player makes.
+class _RecordingFile {
+  _RecordingFile(this.dvrId);
+
+  final int dvrId;
+  int? fileId;
+  int size = 0;
+  int users = 0;
+  Future<void>? opening;
+  Timer? closeTimer;
+  final Set<HttpRequest> requests = <HttpRequest>{};
+}
+
+/// Gets the shared handle for [dvrId], opening the file the first time.
+Future<_RecordingFile> _acquireRecording(
+  HtspStreamProxy proxy,
+  int dvrId,
+) async {
+  final file = proxy._files.putIfAbsent(dvrId, () => _RecordingFile(dvrId));
+  file.closeTimer?.cancel();
+  file.closeTimer = null;
+  file.users++;
+  try {
+    final first = file.opening == null;
+    file.opening ??= proxy._connection
+        .request(
+          'fileOpen',
+          <String, Object?>{'file': 'dvr/$dvrId'},
+          timeout: const Duration(seconds: 20),
+        )
+        .then<void>((opened) {
+      file.fileId = _number(opened['id']);
+      file.size = _number(opened['size']) ?? 0;
+    });
+    await file.opening;
+    final id = file.fileId;
+    if (id == null) {
+      throw HtspException('The server did not open the recording');
+    }
+    if (!first) {
+      // A recording still being made grows: ask for the size again.
+      try {
+        final stat = await proxy._connection.request(
+          'fileStat',
+          <String, Object?>{'id': id},
+          timeout: const Duration(seconds: 10),
+        );
+        final size = _number(stat['size']);
+        if (size != null && size > 0) {
+          file.size = size;
+        }
+      } catch (_) {}
+    }
+    return file;
+  } catch (_) {
+    file.opening = null;
+    _releaseRecording(proxy, file);
+    rethrow;
+  }
+}
+
+/// One user of the handle is done; the file closes a moment after the last
+/// one (the player often reconnects straight away when it seeks).
+void _releaseRecording(HtspStreamProxy proxy, _RecordingFile file) {
+  if (file.users > 0) {
+    file.users--;
+  }
+  if (file.users > 0 || !identical(proxy._files[file.dvrId], file)) {
+    return;
+  }
+  file.closeTimer?.cancel();
+  file.closeTimer = Timer(
+    const Duration(seconds: 3),
+    () => _closeRecording(proxy, file),
+  );
+}
+
+void _closeRecording(HtspStreamProxy proxy, _RecordingFile file) {
+  file.closeTimer?.cancel();
+  file.closeTimer = null;
+  if (identical(proxy._files[file.dvrId], file)) {
+    proxy._files.remove(file.dvrId);
+  }
+  final id = file.fileId;
+  file.fileId = null;
+  if (id != null && !proxy._connection.isClosed) {
+    unawaited(
+      proxy._connection
+          .request(
+            'fileClose',
+            <String, Object?>{'id': id},
+            timeout: const Duration(seconds: 10),
+          )
+          .then<void>((_) {}, onError: (Object _) {}),
+    );
+  }
+}
+
+/// Serves a recording's file to the player, with byte ranges so it can seek.
+/// The file is read from the server with HTSP, so an account needs no web
+/// interface permission, only the right to watch recordings.
 Future<void> _serveRecording(
-  HtspConnection connection,
+  HtspStreamProxy proxy,
   HttpRequest request,
   int dvrId,
 ) async {
-    final response = request.response;
-    int? fileId;
-    try {
-      final opened = await connection.request(
-        'fileOpen',
-        <String, Object?>{'file': 'dvr/$dvrId'},
-        timeout: const Duration(seconds: 20),
-      );
-      fileId = _number(opened['id']);
-      final size = _number(opened['size']) ?? 0;
-      if (fileId == null) {
-        response.statusCode = HttpStatus.notFound;
-        await response.close();
-        return;
-      }
-
-      // Byte range: `bytes=a-b`, `bytes=a-` or `bytes=-n`.
-      var start = 0;
-      var end = size - 1;
-      var partial = false;
-      final range = request.headers.value(HttpHeaders.rangeHeader);
-      if (range != null && range.startsWith('bytes=') && size > 0) {
-        final spec = range.substring(6).split(',').first.trim();
-        final dash = spec.indexOf('-');
-        if (dash >= 0) {
-          final from = int.tryParse(spec.substring(0, dash));
-          final to = int.tryParse(spec.substring(dash + 1));
-          if (from != null) {
-            start = from;
-            if (to != null) {
-              end = math.min(to, size - 1);
-            }
-            partial = true;
-          } else if (to != null) {
-            start = math.max(0, size - to);
-            partial = true;
-          }
-        }
-        if (start >= size || start > end) {
-          response.statusCode = HttpStatus.requestedRangeNotSatisfiable;
-          response.headers.set(HttpHeaders.contentRangeHeader, 'bytes */$size');
-          await response.close();
-          return;
-        }
-      }
-      final length = size == 0 ? 0 : end - start + 1;
-      response
-        ..statusCode = partial ? HttpStatus.partialContent : HttpStatus.ok
-        ..bufferOutput = false
-        ..headers.contentType = ContentType.binary
-        ..headers.set(HttpHeaders.acceptRangesHeader, 'bytes')
-        ..headers.set(HttpHeaders.cacheControlHeader, 'no-store')
-        ..headers.contentLength = length;
-      if (partial) {
-        response.headers.set(
-          HttpHeaders.contentRangeHeader,
-          'bytes $start-$end/$size',
-        );
-      }
-      if (request.method == 'HEAD' || length == 0) {
-        await response.close();
-        return;
-      }
-
-      final id = fileId;
-      Future<Map<String, Object?>> read(int at) => connection.request(
-            'fileRead',
-            <String, Object?>{
-              'id': id,
-              'size': math.min(_recordingChunk, end - at + 1),
-              'offset': at,
-            },
-            timeout: const Duration(seconds: 30),
-          );
-
-      var position = start;
-      Future<Map<String, Object?>>? pending = read(position);
-      try {
-        while (pending != null) {
-          final reply = await pending;
-          pending = null;
-          final data = reply['data'];
-          if (data is! Uint8List || data.isEmpty) {
-            break;
-          }
-          position += data.length;
-          // The next piece is requested while this one is being written.
-          if (position <= end) {
-            pending = read(position);
-          }
-          response.add(data);
-          await response.flush();
-        }
-      } finally {
-        unawaited(pending?.then<void>((_) {}, onError: (Object _) {}));
-      }
+  final response = request.response;
+  _RecordingFile? file;
+  try {
+    file = await _acquireRecording(proxy, dvrId);
+    file.requests.add(request);
+    final fileId = file.fileId;
+    final size = file.size;
+    if (fileId == null) {
+      response.statusCode = HttpStatus.notFound;
       await response.close();
-    } catch (_) {
-      // The player went away or the server refused the file.
-      try {
-        response.statusCode = HttpStatus.badGateway;
-      } catch (_) {}
-      try {
+      return;
+    }
+
+    // Byte range: `bytes=a-b`, `bytes=a-` or `bytes=-n`.
+    var start = 0;
+    var end = size - 1;
+    var partial = false;
+    final range = request.headers.value(HttpHeaders.rangeHeader);
+    if (range != null && range.startsWith('bytes=') && size > 0) {
+      final spec = range.substring(6).split(',').first.trim();
+      final dash = spec.indexOf('-');
+      if (dash >= 0) {
+        final from = int.tryParse(spec.substring(0, dash));
+        final to = int.tryParse(spec.substring(dash + 1));
+        if (from != null) {
+          start = from;
+          if (to != null) {
+            end = math.min(to, size - 1);
+          }
+          partial = true;
+        } else if (to != null) {
+          start = math.max(0, size - to);
+          partial = true;
+        }
+      }
+      if (start >= size || start > end) {
+        response.statusCode = HttpStatus.requestedRangeNotSatisfiable;
+        response.headers.set(HttpHeaders.contentRangeHeader, 'bytes */$size');
         await response.close();
-      } catch (_) {}
-    } finally {
-      final id = fileId;
-      if (id != null && !connection.isClosed) {
-        unawaited(
-          connection
-              .request(
-                'fileClose',
-                <String, Object?>{'id': id},
-                timeout: const Duration(seconds: 10),
-              )
-              .then<void>((_) {}, onError: (Object _) {}),
-        );
+        return;
       }
     }
+    final length = size == 0 ? 0 : end - start + 1;
+    response
+      ..statusCode = partial ? HttpStatus.partialContent : HttpStatus.ok
+      ..bufferOutput = false
+      // One request per connection: nothing is left open once it is done.
+      ..headers.persistentConnection = false
+      ..headers.contentType = ContentType.binary
+      ..headers.set(HttpHeaders.acceptRangesHeader, 'bytes')
+      ..headers.set(HttpHeaders.cacheControlHeader, 'no-store')
+      ..headers.contentLength = length;
+    if (partial) {
+      response.headers.set(
+        HttpHeaders.contentRangeHeader,
+        'bytes $start-$end/$size',
+      );
+    }
+    if (request.method == 'HEAD' || length == 0) {
+      await response.close();
+      return;
+    }
+
+    Future<Map<String, Object?>> read(int at) => proxy._connection.request(
+          'fileRead',
+          <String, Object?>{
+            'id': fileId,
+            'size': math.min(_recordingChunk, end - at + 1),
+            'offset': at,
+          },
+          timeout: const Duration(seconds: 30),
+        );
+
+    var position = start;
+    Future<Map<String, Object?>>? pending = read(position);
+    try {
+      while (pending != null) {
+        final reply = await pending;
+        pending = null;
+        final data = reply['data'];
+        if (data is! Uint8List || data.isEmpty) {
+          break;
+        }
+        position += data.length;
+        // The next piece is requested while this one is being written.
+        if (position <= end) {
+          pending = read(position);
+        }
+        response.add(data);
+        await response.flush();
+      }
+    } finally {
+      unawaited(pending?.then<void>((_) {}, onError: (Object _) {}));
+    }
+    await response.close();
+  } catch (_) {
+    // The player went away or the server refused the file.
+    try {
+      response.statusCode = HttpStatus.badGateway;
+    } catch (_) {}
+    try {
+      await response.close();
+    } catch (_) {}
+  } finally {
+    final used = file;
+    if (used != null) {
+      used.requests.remove(request);
+      _releaseRecording(proxy, used);
+    }
   }
+}
+
+/// The player has left [dvrId]: end its connections and close the file now.
+void _endRecording(HtspStreamProxy proxy, int dvrId) {
+  final file = proxy._files[dvrId];
+  if (file == null) {
+    return;
+  }
+  for (final request in file.requests.toList()) {
+    request.response.detachSocket(writeHeaders: false).then<void>(
+          (socket) => socket.destroy(),
+          onError: (Object _) {},
+        );
+  }
+  _closeRecording(proxy, file);
+}
 
 /// One HTSP subscription per channel, shared by every player connection that
 /// asks for the channel (mpv often opens a stream twice, and a local recording

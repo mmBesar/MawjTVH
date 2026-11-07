@@ -442,6 +442,15 @@ class HtspBackend {
 
   /// Frees the tuner of [channelId] as soon as the player leaves it.
   void releaseStream(String channelId) {
+    const recording = 'rec:';
+    if (channelId.startsWith(recording)) {
+      // A recording read through the proxy: close its file on the server.
+      final dvrId = int.tryParse(channelId.substring(recording.length));
+      if (dvrId != null) {
+        _proxy?.releaseRecording(dvrId);
+      }
+      return;
+    }
     final id = int.tryParse(channelId);
     if (id != null) {
       _proxy?.release(id);

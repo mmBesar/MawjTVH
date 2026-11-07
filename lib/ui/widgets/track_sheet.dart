@@ -187,8 +187,8 @@ String trackLabel(
       codec: codec,
     );
 
-/// One selectable line: a radio mark and a title (the sheet's own, so it does
-/// not depend on the radio widgets that Flutter is replacing).
+/// One selectable line. The chosen one is tinted and ticked; there are no
+/// radio circles.
 class _Choice extends StatelessWidget {
   const _Choice({
     required this.selected,
@@ -202,15 +202,18 @@ class _Choice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      onTap: onTap,
-      leading: Icon(
-        selected
-            ? Icons.radio_button_checked_rounded
-            : Icons.radio_button_unchecked_rounded,
-        color: selected ? Theme.of(context).colorScheme.primary : null,
+    final primary = Theme.of(context).colorScheme.primary;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: ListTile(
+        onTap: onTap,
+        selected: selected,
+        selectedColor: primary,
+        selectedTileColor: primary.withValues(alpha: 0.14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: title,
+        trailing: selected ? const Icon(Icons.check_rounded) : null,
       ),
-      title: title,
     );
   }
 }

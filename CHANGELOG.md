@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.9
+
+- Recordings: all of the player's connections to one recording share a single open file on the server, each connection closes when its request is done, and leaving the recording ends them all and closes the file at once.
+- Audio and subtitle menu: the chosen track is highlighted and ticked; there are no radio circles.
+
 ## 0.1.8
 
 - Recordings play over HTSP: the app's local stream proxy reads the file from the server with HTSP `fileOpen`/`fileRead` and serves it to the player with byte ranges (so seeking works). Accounts without the web interface permission can now watch their recordings. Servers set to HTTP-only still use the web address.
