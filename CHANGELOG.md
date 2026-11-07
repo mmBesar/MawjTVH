@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.10
+
+- Digest login: servers set to Digest-only authentication now work for everything the app fetches over HTTP (the web API, channel logos and programme pictures, recordings in HTTP mode). The app answers the server's challenge and signs later requests straight away. HTSP already had its own login and is unchanged.
+- New tests: the RFC 2617 example request, reading challenges, and a fake Digest-only server that the app's HTTP transport logs in to.
+
 ## 0.1.9
 
 - Recordings: all of the player's connections to one recording share a single open file on the server, each connection closes when its request is done, and leaving the recording ends them all and closes the file at once.

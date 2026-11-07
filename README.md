@@ -86,7 +86,7 @@ This is development software and I test it on my own setup only.
 
 - HTSP streaming, tuner release, subtitles and the on-screen display are
   verified on my server, but not on every kind of Tvheadend setup.
-- Digest authentication is not supported yet (plain or "both" is).
+- Digest login works for the web API, pictures and recordings in HTTP mode. It has only been tested against a fake server in the automated tests, not yet against a real Tvheadend set to Digest. MD5 is the only algorithm supported.
 - Recordings play over HTSP, but a recording that is still being made plays
   only up to the point it had reached when you opened it.
 - Timeshift, Android TV remote support and teletext are on the roadmap, not

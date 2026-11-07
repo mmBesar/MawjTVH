@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../data/http_digest.dart';
 import 'app_info.dart';
 
 const String kMawjUserAgent =
@@ -52,6 +53,9 @@ final _FetchLimiter _imageFetches = _FetchLimiter(16);
 /// a new TCP connection and TLS handshake for every logo; a playlist of a few
 /// hundred channels on a self-hosted server spent most of its time there.
 final Map<bool, HttpClient> _clients = <bool, HttpClient>{};
+
+/// Digest logins already answered, one per server and account.
+final Map<String, DigestAuth> _imageDigests = <String, DigestAuth>{};
 
 HttpClient _sharedClient(bool allowInsecure) {
   return _clients.putIfAbsent(allowInsecure, () {
@@ -119,9 +123,18 @@ class MawjNetworkImage extends ImageProvider<MawjNetworkImage> {
             path: uri.path,
             query: uri.query.isEmpty ? null : uri.query,
           );
+    final decodedLogin = userInfo.isEmpty ? '' : Uri.decodeComponent(userInfo);
     final authorization = userInfo.isEmpty
         ? null
-        : 'Basic ${base64Encode(utf8.encode(Uri.decodeComponent(userInfo)))}';
+        : 'Basic ${base64Encode(utf8.encode(decodedLogin))}';
+    final colon = decodedLogin.indexOf(':');
+    final (String, String)? login = userInfo.isEmpty
+        ? null
+        : (
+            colon < 0 ? decodedLogin : decodedLogin.substring(0, colon),
+            colon < 0 ? '' : decodedLogin.substring(colon + 1),
+          );
+    final digestKey = '${uri.scheme}://${uri.host}:${uri.port}|$decodedLogin';
 
     // Logos are served again every time Flutter's in-memory image cache
     // evicts them (a big playlist can push the previous source out). Keep a
@@ -150,15 +163,39 @@ class MawjNetworkImage extends ImageProvider<MawjNetworkImage> {
         final client = _sharedClient(key.allowInsecure);
 
         try {
-          final request = await client
-              .getUrl(requestUri)
-              .timeout(const Duration(seconds: 15));
-          request.headers.set(HttpHeaders.acceptHeader, 'image/*,*/*;q=0.8');
-          if (authorization != null) {
-            request.headers.set(HttpHeaders.authorizationHeader, authorization);
+          Future<HttpClientResponse> fetch(String? auth) async {
+            final request = await client
+                .getUrl(requestUri)
+                .timeout(const Duration(seconds: 15));
+            request.headers.set(HttpHeaders.acceptHeader, 'image/*,*/*;q=0.8');
+            if (auth != null) {
+              request.headers.set(HttpHeaders.authorizationHeader, auth);
+            }
+            return request.close().timeout(const Duration(seconds: 15));
           }
-          final response =
-              await request.close().timeout(const Duration(seconds: 15));
+
+          final target = requestTargetOf(requestUri);
+          var response = await fetch(
+            _imageDigests[digestKey]?.authorization('GET', target) ??
+                authorization,
+          );
+          if (response.statusCode == HttpStatus.unauthorized &&
+              login != null) {
+            // A server that only accepts Digest login: answer its challenge
+            // and remember it for the next picture.
+            final challenge = DigestChallenge.pick(
+              response.headers[HttpHeaders.wwwAuthenticateHeader],
+            );
+            if (challenge != null) {
+              await response.drain<void>();
+              final digest = _imageDigests.putIfAbsent(
+                digestKey,
+                () => DigestAuth(login.$1, login.$2),
+              );
+              digest.accept(challenge);
+              response = await fetch(digest.authorization('GET', target));
+            }
+          }
           if (response.statusCode < 200 || response.statusCode >= 300) {
             await response.drain<void>();
             final error = NetworkImageLoadException(

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import '../core/network_image.dart';
 import 'htsp_backend.dart' show looksLikeRadioTag;
+import 'http_digest.dart';
 import 'models.dart';
 import 'tvh_address.dart';
 import 'tvh_models.dart';
@@ -27,11 +28,19 @@ class TvhException implements Exception {
 }
 
 class TvhResponse {
-  const TvhResponse(this.statusCode, this.bytes, {this.location});
+  const TvhResponse(
+    this.statusCode,
+    this.bytes, {
+    this.location,
+    this.authenticate = const <String>[],
+  });
 
   final int statusCode;
   final List<int> bytes;
   final String? location;
+
+  /// The `WWW-Authenticate` challenges of a 401.
+  final List<String> authenticate;
 
   String get body => utf8.decode(bytes, allowMalformed: true);
 }
@@ -51,7 +60,11 @@ abstract class TvhTransport {
 }
 
 class IoTvhTransport implements TvhTransport {
-  IoTvhTransport({required bool allowInsecure}) {
+  IoTvhTransport({
+    required bool allowInsecure,
+    String username = '',
+    String password = '',
+  }) : _digest = username.isEmpty ? null : DigestAuth(username, password) {
     _client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 8)
       ..idleTimeout = const Duration(seconds: 20)
@@ -63,6 +76,7 @@ class IoTvhTransport implements TvhTransport {
   }
 
   late final HttpClient _client;
+  final DigestAuth? _digest;
 
   @override
   Future<TvhResponse> send(
@@ -70,6 +84,45 @@ class IoTvhTransport implements TvhTransport {
     Uri uri, {
     Map<String, String>? form,
     Map<String, String>? headers,
+    Duration? timeout,
+  }) async {
+    final digest = _digest;
+    final target = requestTargetOf(uri);
+    // Once the server has asked for Digest, sign every request straight away.
+    var signed = digest?.authorization(method, target);
+    var response = await _once(
+      method,
+      uri,
+      form: form,
+      headers: headers,
+      authorization: signed,
+      timeout: timeout,
+    );
+    if (response.statusCode == 401 && digest != null) {
+      final challenge = DigestChallenge.pick(response.authenticate);
+      if (challenge != null) {
+        // First contact, or the nonce went stale: answer and try once more.
+        digest.accept(challenge);
+        signed = digest.authorization(method, target);
+        response = await _once(
+          method,
+          uri,
+          form: form,
+          headers: headers,
+          authorization: signed,
+          timeout: timeout,
+        );
+      }
+    }
+    return response;
+  }
+
+  Future<TvhResponse> _once(
+    String method,
+    Uri uri, {
+    Map<String, String>? form,
+    Map<String, String>? headers,
+    String? authorization,
     Duration? timeout,
   }) async {
     final limit = timeout ?? const Duration(seconds: 30);
@@ -80,6 +133,9 @@ class IoTvhTransport implements TvhTransport {
     request.headers.set(HttpHeaders.acceptHeader, 'application/json, */*');
     request.headers.set(HttpHeaders.acceptEncodingHeader, 'gzip');
     headers?.forEach(request.headers.set);
+    if (authorization != null) {
+      request.headers.set(HttpHeaders.authorizationHeader, authorization);
+    }
     if (form != null) {
       request.headers.contentType = ContentType(
         'application',
@@ -97,6 +153,8 @@ class IoTvhTransport implements TvhTransport {
       response.statusCode,
       builder.takeBytes(),
       location: response.headers.value(HttpHeaders.locationHeader),
+      authenticate:
+          response.headers[HttpHeaders.wwwAuthenticateHeader] ?? const <String>[],
     );
   }
 
@@ -110,7 +168,12 @@ class IoTvhTransport implements TvhTransport {
 class TvhClient {
   TvhClient(this.source, {TvhTransport? transport})
       : _address = TvhAddress.parse(source.address),
-        _transport = transport ?? IoTvhTransport(allowInsecure: source.allowInsecureCerts);
+        _transport = transport ??
+            IoTvhTransport(
+              allowInsecure: source.allowInsecureCerts,
+              username: source.username,
+              password: source.password,
+            );
 
   final SourceConfig source;
   final TvhTransport _transport;
