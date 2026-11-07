@@ -1051,6 +1051,35 @@ class _PlayerSettings extends StatelessWidget {
                       height: 1.4,
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  _FieldLabel(text: strings.hardwareDecoding),
+                  DropdownButton<String>(
+                    isExpanded: true,
+                    value: const <String>['auto-safe', 'auto', 'auto-copy-safe', 'no']
+                            .contains(settings.hwdec)
+                        ? settings.hwdec
+                        : 'auto-safe',
+                    dropdownColor: colors.surface1,
+                    items: <DropdownMenuItem<String>>[
+                      for (final value in const <String>[
+                        'auto-safe',
+                        'auto',
+                        'auto-copy-safe',
+                        'no',
+                      ])
+                        DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(_hwdecLabel(strings, value)),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        unawaited(
+                          state.updateSettings(settings.copyWith(hwdec: value)),
+                        );
+                      }
+                    },
+                  ),
                 ],
                 if (enabled && settings.useMpvWindow) ...<Widget>[
                   const SizedBox(height: 8),

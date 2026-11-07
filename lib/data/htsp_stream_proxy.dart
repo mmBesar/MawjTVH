@@ -122,7 +122,7 @@ class HtspStreamProxy {
 const int _recordingChunk = 256 * 1024;
 
 /// How many chunks are requested ahead of the one being written.
-const int _recordingReadAhead = 4;
+const int _recordingReadAhead = 8;
 
 int? _number(Object? value) {
   if (value is int) {

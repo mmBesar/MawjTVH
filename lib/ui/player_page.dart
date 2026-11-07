@@ -203,8 +203,8 @@ class _PlayerPageState extends State<PlayerPage> {
 
   // Resume: where a recording stopped last time, offered for a few seconds.
   Duration? _resumeOffer;
+  Completer<Duration?>? _resumeChoice;
   bool _offered = false;
-  Timer? _offerTimer;
   Timer? _positionTimer;
   Map<String, String> _infoProps = const <String, String>{};
   double _osdValue = 0;
@@ -337,34 +337,31 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
-  void _offerResume() {
-    if (_offered || !_isVod || !mounted) {
-      return;
-    }
-    _offered = true;
-    final at = _appState.resumeFor(_channel);
-    if (at == null) {
-      return;
-    }
-    setState(() => _resumeOffer = at);
-    _offerTimer?.cancel();
-    _offerTimer = Timer(const Duration(seconds: 12), _dismissOffer);
+  /// Asks whether to continue [at]; completes with the chosen position, or
+  /// null for "start over".
+  Future<Duration?> _askResume(Duration at) {
+    final completer = Completer<Duration?>();
+    _resumeChoice = completer;
+    // May be called while the page is still being created, so the rebuild
+    // waits for the first frame instead of calling setState right here.
+    _resumeOffer = at;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+    return completer.future;
   }
 
-  void _dismissOffer() {
-    _offerTimer?.cancel();
-    if (mounted && _resumeOffer != null) {
-      setState(() => _resumeOffer = null);
-    }
-  }
-
-  void _acceptResume() {
+  void _chooseResume(bool resume) {
     final at = _resumeOffer;
-    _dismissOffer();
-    if (at != null) {
-      unawaited(_player.seek(at));
-      _showControls();
+    final completer = _resumeChoice;
+    _resumeChoice = null;
+    setState(() => _resumeOffer = null);
+    if (completer != null && !completer.isCompleted) {
+      completer.complete(resume ? at : null);
     }
+    _focusNode.requestFocus();
   }
 
   void _onLog(PlayerLog log) {
@@ -397,6 +394,18 @@ class _PlayerPageState extends State<PlayerPage> {
       _autoRetries = 0;
     }
     _errorTimer?.cancel();
+    // A recording that was left part-way: ask before anything starts.
+    Duration? resumeAt;
+    if (!auto && !_offered && _isVod) {
+      _offered = true;
+      final at = context.read<AppState>().resumeFor(_channel);
+      if (at != null) {
+        resumeAt = await _askResume(at);
+        if (!mounted) {
+          return;
+        }
+      }
+    }
     await _stopLocalRecording(silent: true);
     _stallTimer?.cancel();
     setState(() {
@@ -422,7 +431,9 @@ class _PlayerPageState extends State<PlayerPage> {
     try {
       await _setMpvProperty(
         'hwdec',
-        Platform.isLinux && !_gpu ? _linuxHwdec() : 'auto-safe',
+        Platform.isLinux
+            ? (_gpu ? _appState.settings.hwdec : _linuxHwdec())
+            : 'auto-safe',
       );
       if (Platform.isLinux && !_gpu) {
         // Everything after decoding runs on the CPU: decode on all cores and
@@ -451,16 +462,34 @@ class _PlayerPageState extends State<PlayerPage> {
           _channel.url,
           httpHeaders: const <String, String>{'User-Agent': kMawjUserAgent},
         ),
-        play: true,
+        play: resumeAt == null,
       );
       if (!mounted) {
         // The page was closed while the stream was still opening.
         unawaited(_player.stop());
         return;
       }
+      if (resumeAt != null) {
+        // Seeking works only once the file is known, so wait for its length,
+        // jump, and only then start playing.
+        if (_player.state.duration <= Duration.zero) {
+          try {
+            await _player.stream.duration
+                .firstWhere((length) => length > Duration.zero)
+                .timeout(const Duration(seconds: 20));
+          } catch (_) {
+            // Go on anyway: the seek may still work.
+          }
+        }
+        if (!mounted) {
+          unawaited(_player.stop());
+          return;
+        }
+        await _player.seek(resumeAt);
+        await _player.play();
+      }
       if (mounted) {
         setState(() => _buffering = false);
-        _offerResume();
       }
     } catch (error) {
       if (mounted) {
@@ -1539,7 +1568,10 @@ class _PlayerPageState extends State<PlayerPage> {
     // Silence first, before anything else that could throw: stopping ends
     // playback at once, even if the player takes a while to shut down.
     _positionTimer?.cancel();
-    _offerTimer?.cancel();
+    final choice = _resumeChoice;
+    if (choice != null && !choice.isCompleted) {
+      choice.complete(null);
+    }
     if (_isVod) {
       try {
         _appState.savePosition(
@@ -2032,7 +2064,6 @@ class _PlayerPageState extends State<PlayerPage> {
                   ),
                 if (problem) _buildProblem(strings),
                 _buildControls(state, immersive: immersive, constraints: constraints),
-                if (_resumeOffer != null) _buildResumeOffer(strings),
                 if (_infoVisible && _osdKind == null && !_browserOpen && !_epgOpen)
                   _infoBanner(state),
                 if (kIsDesktop &&
@@ -2057,6 +2088,7 @@ class _PlayerPageState extends State<PlayerPage> {
                       subtitle: _osdSubtitle,
                     ),
                   ),
+                if (_resumeOffer != null) _buildResumePrompt(strings),
               ],
             ),
           ),
@@ -2066,44 +2098,64 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
-  Widget _buildResumeOffer(AppStrings strings) {
+  /// Shown before a recording starts when it was left part-way.
+  Widget _buildResumePrompt(AppStrings strings) {
     final at = _resumeOffer!;
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: Padding(
-        padding: EdgeInsets.only(bottom: _isDesktop ? 170 : 190, left: 16, right: 16),
-        child: Material(
-          color: Colors.black.withValues(alpha: 0.82),
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(16, 6, 8, 6),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                const Icon(Icons.history_rounded, color: Colors.white70, size: 20),
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Text(
-                    strings.resumeFrom(_formatClock(at)),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
+    return Positioned.fill(
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.92),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const Icon(Icons.history_rounded, size: 44, color: Colors.white70),
+                    const SizedBox(height: 14),
+                    Text(
+                      strings.resumeFrom(_formatClock(at)),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _channel.name,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white70, fontSize: 15),
+                    ),
+                    const SizedBox(height: 22),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: () => _chooseResume(true),
+                        icon: const Icon(Icons.play_arrow_rounded),
+                        label: Text(strings.resumeAction),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: () => _chooseResume(false),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.white54),
+                        ),
+                        child: Text(strings.startOver),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: _acceptResume,
-                  child: Text(strings.resumeAction),
-                ),
-                TextButton(
-                  onPressed: _dismissOffer,
-                  child: Text(
-                    strings.startOver,
-                    style: const TextStyle(color: Colors.white70),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),

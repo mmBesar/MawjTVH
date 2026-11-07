@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.15
+
+- Resume is asked before the recording starts: a full-screen message ("Continue from 12:34", Resume / Start over) on both Linux and Android, instead of a small bar over the picture. Resume waits for the file to be known, jumps to the saved point, and then starts playing; before, the button could do nothing on desktop because the jump came too early.
+- Linux in-app player: the "Hardware decoding" setting now applies to it as well (it was fixed to auto-safe) and is shown under the renderer setting. Try "Off" or "Copy back" if frames drop.
+- Recordings read eight chunks ahead.
+
 ## 0.1.14
 
 - Recordings over HTSP read four chunks ahead instead of one, so a slow or distant connection (VPN, internet) no longer limits the playback speed to one chunk per round trip. A short read near the end of a file that is still being recorded is handled by asking again from that point.
