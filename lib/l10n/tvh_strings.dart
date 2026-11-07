@@ -205,6 +205,8 @@ extension TvhStrings on AppStrings {
   String get onWord => isArabic ? 'تشغيل' : 'On';
   String get offWord => isArabic ? 'إيقاف' : 'Off';
   String get audioDelayLabel => isArabic ? 'تأخير الصوت' : 'Audio delay';
+  String get seekBack10 => isArabic ? 'رجوع ١٠ ثوانٍ' : 'Back 10 s';
+  String get seekForward10 => isArabic ? 'تقدّم ١٠ ثوانٍ' : 'Forward 10 s';
   String get resetPictureLabel =>
       isArabic ? 'إعادة ضبط الصورة والصوت' : 'Picture and audio reset';
   String get resetPictureDone =>
@@ -231,6 +233,7 @@ extension TvhStrings on AppStrings {
           ('Z', 'تغيير نسبة العرض'),
           ('T', 'إزالة التداخل'),
           ('X', 'إعادة ضبط النسبة والتداخل وتأخير الصوت'),
+          ('← → (تسجيل)', 'تقديم أو رجوع ١٠ ثوانٍ، مع Shift ٦٠ ثانية، PgUp PgDn ٥ دقائق'),
           ('R', 'تسجيل على هذا الجهاز'),
           ('D', 'التشخيص'),
           ('Ctrl + − 0', 'تكبير وتصغير الواجهة'),
@@ -255,6 +258,7 @@ extension TvhStrings on AppStrings {
           ('Z', 'Cycle aspect ratio'),
           ('T', 'Deinterlace'),
           ('X', 'Reset aspect, deinterlace and audio delay'),
+          ('← →  (recording)', 'Seek 10 s, with Shift 60 s, PgUp PgDn 5 min'),
           ('R', 'Record on this device'),
           ('D', 'Diagnostics'),
           ('H F1', 'This sheet'),

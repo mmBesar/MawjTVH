@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.11
+
+- Recordings can be seeked: a seek bar (tap or drag) with elapsed and total time, ±10 s buttons, and on a phone a horizontal swipe jumps ±30 s. Keyboard: Left/Right ±10 s, Shift+Left/Right ±60 s, PgUp/PgDn ±5 min, Up/Down volume. Live TV keeps zapping on those keys.
+- Leaving a recording now stops playback before releasing the player, drops a player that finished opening after you had left, and the external mpv window is force-closed if it ignores the quit request. This is meant to end audio carrying on after Back; it could not be reproduced here, so please report if it still happens.
+
 ## 0.1.10
 
 - Digest login: servers set to Digest-only authentication now work for everything the app fetches over HTTP (the web API, channel logos and programme pictures, recordings in HTTP mode). The app answers the server's challenge and signs later requests straight away. HTSP already had its own login and is unchanged.

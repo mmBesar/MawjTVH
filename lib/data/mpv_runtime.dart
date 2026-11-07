@@ -491,6 +491,11 @@ class MpvSession {
     await _process.exitCode
         .timeout(const Duration(milliseconds: 600), onTimeout: () => -1);
     _process.kill(ProcessSignal.sigterm);
+    // A player stuck on a stalled stream can ignore a polite request: make
+    // sure it is really gone so no sound is left behind.
+    await _process.exitCode
+        .timeout(const Duration(milliseconds: 800), onTimeout: () => -1);
+    _process.kill(ProcessSignal.sigkill);
     _cleanup();
   }
 

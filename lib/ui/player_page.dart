@@ -397,6 +397,11 @@ class _PlayerPageState extends State<PlayerPage> {
         ),
         play: true,
       );
+      if (!mounted) {
+        // The page was closed while the stream was still opening.
+        unawaited(_player.stop());
+        return;
+      }
       if (mounted) {
         setState(() => _buffering = false);
       }
@@ -890,6 +895,80 @@ class _PlayerPageState extends State<PlayerPage> {
       strings.aspectLabel,
       strings.aspectName(next),
     );
+  }
+
+  /// True while a recording (not live TV) is playing: it can be seeked.
+  bool get _isVod => isSyntheticChannel(_channel);
+
+  /// Jumps [seconds] forward (or back, when negative) in a recording.
+  void _seekBy(int seconds) {
+    final total = _player.state.duration;
+    var target = _player.state.position + Duration(seconds: seconds);
+    if (target < Duration.zero) {
+      target = Duration.zero;
+    }
+    if (total > Duration.zero && target > total) {
+      target = total;
+    }
+    unawaited(_player.seek(target));
+    _showMessage(
+      seconds > 0 ? Icons.fast_forward_rounded : Icons.fast_rewind_rounded,
+      '${seconds > 0 ? '+' : '−'}${seconds.abs()} s',
+      total > Duration.zero
+          ? '${_formatClock(target)} / ${_formatClock(total)}'
+          : _formatClock(target),
+    );
+    _showControls();
+  }
+
+  // Arrow keys: volume and channels on live TV; volume and seeking in a
+  // recording.
+  void _onUp() {
+    if (_isVod) {
+      _adjustVolume(5.0);
+    } else {
+      _zap(-1);
+    }
+  }
+
+  void _onDown() {
+    if (_isVod) {
+      _adjustVolume(-5.0);
+    } else {
+      _zap(1);
+    }
+  }
+
+  void _onLeft() {
+    if (_isVod) {
+      _seekBy(-10);
+    } else {
+      _adjustVolume(-5.0);
+    }
+  }
+
+  void _onRight() {
+    if (_isVod) {
+      _seekBy(10);
+    } else {
+      _adjustVolume(5.0);
+    }
+  }
+
+  void _onPageUp() {
+    if (_isVod) {
+      _seekBy(-300);
+    } else {
+      _zap(-1);
+    }
+  }
+
+  void _onPageDown() {
+    if (_isVod) {
+      _seekBy(300);
+    } else {
+      _zap(1);
+    }
   }
 
   /// Back to the stream's own picture: original aspect, no deinterlacing, no
@@ -1442,9 +1521,18 @@ class _PlayerPageState extends State<PlayerPage> {
     final leaving = _channel;
     final appState = _appState;
     appState.releaseStream(leaving);
-    unawaited(
-      _player.dispose().whenComplete(() => appState.releaseStream(leaving)),
-    );
+    // Silence first: stopping ends playback and closes the stream at once,
+    // even if the player takes a while to shut down.
+    final player = _player;
+    unawaited(() async {
+      try {
+        await player.stop();
+      } catch (_) {}
+      try {
+        await player.dispose();
+      } catch (_) {}
+      appState.releaseStream(leaving);
+    }());
     if (_isDesktop) {
       if (_fullscreen) {
         unawaited(_setNativeFullscreen(false));
@@ -1488,10 +1576,21 @@ class _PlayerPageState extends State<PlayerPage> {
             unawaited(_player.playOrPause());
           },
           const SingleActivator(LogicalKeyboardKey.keyM): _toggleMute,
-          const SingleActivator(LogicalKeyboardKey.arrowUp): () => _zap(-1),
-          const SingleActivator(LogicalKeyboardKey.pageUp): () => _zap(-1),
-          const SingleActivator(LogicalKeyboardKey.arrowDown): () => _zap(1),
-          const SingleActivator(LogicalKeyboardKey.pageDown): () => _zap(1),
+          const SingleActivator(LogicalKeyboardKey.arrowUp): _onUp,
+          const SingleActivator(LogicalKeyboardKey.pageUp): _onPageUp,
+          const SingleActivator(LogicalKeyboardKey.arrowDown): _onDown,
+          const SingleActivator(LogicalKeyboardKey.pageDown): _onPageDown,
+          const SingleActivator(LogicalKeyboardKey.arrowRight, shift: true):
+              () {
+            if (_isVod) {
+              _seekBy(60);
+            }
+          },
+          const SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true): () {
+            if (_isVod) {
+              _seekBy(-60);
+            }
+          },
           const SingleActivator(LogicalKeyboardKey.keyI): _toggleInfo,
           const SingleActivator(LogicalKeyboardKey.keyD): () {
             unawaited(_showDiagnostics());
@@ -1551,10 +1650,8 @@ class _PlayerPageState extends State<PlayerPage> {
           const SingleActivator(LogicalKeyboardKey.numpad7): () => _digit(7),
           const SingleActivator(LogicalKeyboardKey.numpad8): () => _digit(8),
           const SingleActivator(LogicalKeyboardKey.numpad9): () => _digit(9),
-          const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
-              _adjustVolume(5),
-          const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
-              _adjustVolume(-5),
+          const SingleActivator(LogicalKeyboardKey.arrowRight): _onRight,
+          const SingleActivator(LogicalKeyboardKey.arrowLeft): _onLeft,
           const SingleActivator(LogicalKeyboardKey.equal): () =>
               _adjustVolume(5),
           const SingleActivator(LogicalKeyboardKey.numpadAdd): () =>
@@ -1793,7 +1890,11 @@ class _PlayerPageState extends State<PlayerPage> {
             onHorizontalDragEnd: (details) {
               final velocity = details.primaryVelocity ?? 0;
               if (velocity.abs() > 900) {
-                _zap(velocity < 0 ? 1 : -1);
+                if (_isVod) {
+                  _seekBy(velocity < 0 ? 30 : -30);
+                } else {
+                  _zap(velocity < 0 ? 1 : -1);
+                }
               }
             },
             child: Stack(
@@ -2104,10 +2205,25 @@ class _PlayerPageState extends State<PlayerPage> {
                         ),
                         const SizedBox(height: 4),
                       ],
+                      if (_isVod)
+                        PlayerSeekBar(player: _player, onSeek: _showControls),
                       Row(
                         children: <Widget>[
-                          icon(Icons.skip_previous_rounded, strings.previousChannel,
-                              () => _zap(-1)),
+                          icon(
+                            _isVod
+                                ? Icons.replay_10_rounded
+                                : Icons.skip_previous_rounded,
+                            _isVod
+                                ? strings.seekBack10
+                                : strings.previousChannel,
+                            () {
+                              if (_isVod) {
+                                _seekBy(-10);
+                              } else {
+                                _zap(-1);
+                              }
+                            },
+                          ),
                           icon(
                             _playing
                                 ? Icons.pause_rounded
@@ -2115,8 +2231,19 @@ class _PlayerPageState extends State<PlayerPage> {
                             _playing ? strings.pause : strings.play,
                             () => unawaited(_player.playOrPause()),
                           ),
-                          icon(Icons.skip_next_rounded, strings.nextChannel,
-                              () => _zap(1)),
+                          icon(
+                            _isVod
+                                ? Icons.forward_10_rounded
+                                : Icons.skip_next_rounded,
+                            _isVod ? strings.seekForward10 : strings.nextChannel,
+                            () {
+                              if (_isVod) {
+                                _seekBy(10);
+                              } else {
+                                _zap(1);
+                              }
+                            },
+                          ),
                           StreamBuilder<double>(
                             stream: _player.stream.volume,
                             initialData: _player.state.volume,
@@ -2336,10 +2463,20 @@ class _PlayerPageState extends State<PlayerPage> {
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
                           _RoundButton(
-                            tooltip: strings.previousChannel,
-                            icon: Icons.skip_previous_rounded,
+                            tooltip: _isVod
+                                ? strings.seekBack10
+                                : strings.previousChannel,
+                            icon: _isVod
+                                ? Icons.replay_10_rounded
+                                : Icons.skip_previous_rounded,
                             size: 36,
-                            onPressed: () => _zap(-1),
+                            onPressed: () {
+                              if (_isVod) {
+                                _seekBy(-10);
+                              } else {
+                                _zap(-1);
+                              }
+                            },
                           ),
                           const SizedBox(width: 18),
                           _RoundButton(
@@ -2356,16 +2493,39 @@ class _PlayerPageState extends State<PlayerPage> {
                           ),
                           const SizedBox(width: 18),
                           _RoundButton(
-                            tooltip: strings.nextChannel,
-                            icon: Icons.skip_next_rounded,
+                            tooltip: _isVod
+                                ? strings.seekForward10
+                                : strings.nextChannel,
+                            icon: _isVod
+                                ? Icons.forward_10_rounded
+                                : Icons.skip_next_rounded,
                             size: 36,
-                            onPressed: () => _zap(1),
+                            onPressed: () {
+                              if (_isVod) {
+                                _seekBy(10);
+                              } else {
+                                _zap(1);
+                              }
+                            },
                           ),
                         ],
                       ),
                     ),
                   ),
                 ),
+                if (_isVod)
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      12 + padding.left,
+                      0,
+                      12 + padding.right,
+                      0,
+                    ),
+                    child: PlayerSeekBar(
+                      player: _player,
+                      onSeek: _showControls,
+                    ),
+                  ),
                 // Action buttons: volume, channels, guide, tracks, favourite,
                 // recording, floating window.
                 Padding(
@@ -2959,6 +3119,102 @@ class _RoundButton extends StatelessWidget {
         color: filled ? Theme.of(context).colorScheme.onPrimary : color,
         icon: Icon(icon),
       ),
+    );
+  }
+}
+
+/// 1:02:03 or 02:03.
+String _formatClock(Duration value) {
+  final total = value.inSeconds < 0 ? 0 : value.inSeconds;
+  final hours = total ~/ 3600;
+  final minutes = (total % 3600) ~/ 60;
+  final seconds = total % 60;
+  String two(int number) => number.toString().padLeft(2, '0');
+  return hours > 0
+      ? '$hours:${two(minutes)}:${two(seconds)}'
+      : '${two(minutes)}:${two(seconds)}';
+}
+
+/// Position, a slider and the length of a recording. Drag or tap the slider
+/// to jump anywhere in the file.
+class PlayerSeekBar extends StatefulWidget {
+  const PlayerSeekBar({super.key, required this.player, this.onSeek});
+
+  final Player player;
+  final VoidCallback? onSeek;
+
+  @override
+  State<PlayerSeekBar> createState() => _PlayerSeekBarState();
+}
+
+class _PlayerSeekBarState extends State<PlayerSeekBar> {
+  /// Seconds while the thumb is being dragged, otherwise null.
+  double? _drag;
+
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(
+      color: Colors.white,
+      fontSize: 12,
+      fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
+    );
+    return StreamBuilder<Duration>(
+      stream: widget.player.stream.duration,
+      initialData: widget.player.state.duration,
+      builder: (context, durationSnapshot) {
+        final total = durationSnapshot.data ?? widget.player.state.duration;
+        return StreamBuilder<Duration>(
+          stream: widget.player.stream.position,
+          initialData: widget.player.state.position,
+          builder: (context, positionSnapshot) {
+            final position =
+                positionSnapshot.data ?? widget.player.state.position;
+            final totalSeconds = total.inMilliseconds / 1000.0;
+            final known = totalSeconds > 0;
+            final seconds = _drag ?? position.inMilliseconds / 1000.0;
+            return Row(
+              children: <Widget>[
+                Text(
+                  _formatClock(Duration(milliseconds: (seconds * 1000).round())),
+                  style: style,
+                ),
+                Expanded(
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 3,
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 6,
+                      ),
+                      overlayShape: SliderComponentShape.noOverlay,
+                    ),
+                    child: Slider(
+                      value: known
+                          ? seconds.clamp(0.0, totalSeconds).toDouble()
+                          : 0.0,
+                      max: known ? totalSeconds : 1.0,
+                      onChanged: known
+                          ? (value) => setState(() => _drag = value)
+                          : null,
+                      onChangeEnd: known
+                          ? (value) {
+                              setState(() => _drag = null);
+                              unawaited(
+                                widget.player.seek(
+                                  Duration(milliseconds: (value * 1000).round()),
+                                ),
+                              );
+                              widget.onSeek?.call();
+                            }
+                          : null,
+                    ),
+                  ),
+                ),
+                Text(known ? _formatClock(total) : '--:--', style: style),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

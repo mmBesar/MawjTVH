@@ -68,6 +68,7 @@ account on.
 | `G` | Guide for the channel |
 | `I` | Channel banner, `P` to pin it |
 | `↑` `↓` / digits | Next, previous channel / number |
+| `←` `→` (recording) | Seek 10 s, with Shift 60 s; `PgUp` `PgDn` 5 min |
 | `A` / `S` | Audio / subtitle track |
 | `Z` | Aspect ratio |
 | `X` | Reset aspect, deinterlace and audio delay |
