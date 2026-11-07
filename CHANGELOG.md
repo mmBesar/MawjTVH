@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.14
+
+- Recordings over HTSP read four chunks ahead instead of one, so a slow or distant connection (VPN, internet) no longer limits the playback speed to one chunk per round trip. A short read near the end of a file that is still being recorded is handled by asking again from that point.
+
 ## 0.1.13
 
 - Resume: a recording remembers where you stopped. The next time you play it, a prompt offers "Continue from 12:34" or "Start over" for a few seconds. The position is saved every 15 seconds and when you leave; stopping in the first 30 seconds keeps the earlier position, and finishing (or the last minute) clears it.

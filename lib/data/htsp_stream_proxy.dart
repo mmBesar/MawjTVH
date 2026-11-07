@@ -121,6 +121,9 @@ class HtspStreamProxy {
 
 const int _recordingChunk = 256 * 1024;
 
+/// How many chunks are requested ahead of the one being written.
+const int _recordingReadAhead = 4;
+
 int? _number(Object? value) {
   if (value is int) {
     return value;
@@ -299,36 +302,54 @@ Future<void> _serveRecording(
       return;
     }
 
-    Future<Map<String, Object?>> read(int at) => proxy._connection.request(
-          'fileRead',
-          <String, Object?>{
-            'id': fileId,
-            'size': math.min(_recordingChunk, end - at + 1),
-            'offset': at,
-          },
-          timeout: const Duration(seconds: 30),
-        );
+    Future<Map<String, Object?>> read(int at, int length) {
+      final reply = proxy._connection.request(
+        'fileRead',
+        <String, Object?>{'id': fileId, 'size': length, 'offset': at},
+        timeout: const Duration(seconds: 30),
+      );
+      // Several reads are in flight at once; a failure of one that is still
+      // waiting its turn must not be reported as unhandled.
+      reply.ignore();
+      return reply;
+    }
 
+    // Reads run a few chunks ahead of what has been written, so the round
+    // trip to the server (large over a VPN or the internet) does not limit
+    // the speed.
     var position = start;
-    Future<Map<String, Object?>>? pending = read(position);
+    var requested = start;
+    final queue = <({Future<Map<String, Object?>> reply, int length})>[];
+    void fill() {
+      while (queue.length < _recordingReadAhead && requested <= end) {
+        final length = math.min(_recordingChunk, end - requested + 1);
+        queue.add((reply: read(requested, length), length: length));
+        requested += length;
+      }
+    }
+
     try {
-      while (pending != null) {
-        final reply = await pending;
-        pending = null;
+      fill();
+      while (queue.isNotEmpty) {
+        final item = queue.removeAt(0);
+        final reply = await item.reply;
         final data = reply['data'];
         if (data is! Uint8List || data.isEmpty) {
           break;
         }
         position += data.length;
-        // The next piece is requested while this one is being written.
-        if (position <= end) {
-          pending = read(position);
+        if (data.length < item.length) {
+          // A short read (a file still being written): the reads already
+          // asked for are misplaced, so ask again from here.
+          queue.clear();
+          requested = position;
         }
+        fill();
         response.add(data);
         await response.flush();
       }
     } finally {
-      unawaited(pending?.then<void>((_) {}, onError: (Object _) {}));
+      queue.clear();
     }
     await response.close();
   } catch (_) {
