@@ -433,7 +433,11 @@ class HtspBackend {
   }
 
   /// Address of a recording's file.
+  ///
+  /// Over HTSP the file is read through the local proxy, so an account that
+  /// has no web interface permission can still watch its recordings.
   String recordingUrl(String dvrId) =>
+      _proxy?.urlForRecording(dvrId) ??
       _address.dvrUrl(dvrId, user: _user, pass: _pass);
 
   /// Frees the tuner of [channelId] as soon as the player leaves it.

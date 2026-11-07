@@ -308,6 +308,24 @@ class AppState extends ChangeNotifier {
       _htspRetry = null;
       await load();
     }
+    if (channel.id.startsWith('${kRecordingIdPrefix}local:')) {
+      return channel;
+    }
+    if (channel.id.startsWith(kRecordingIdPrefix)) {
+      // A recording served over HTSP: its address belongs to the session too.
+      final session = _htspSession;
+      if (session != null && !session.isClosed) {
+        return Channel(
+          id: channel.id,
+          sourceId: channel.sourceId,
+          name: channel.name,
+          number: channel.number,
+          url: session.recordingUrl(channel.id.substring(kRecordingIdPrefix.length)),
+          group: channel.group,
+        );
+      }
+      return channel;
+    }
     return _channelById[channel.id] ?? channel;
   }
 
@@ -872,6 +890,10 @@ class AppState extends ChangeNotifier {
     final source = liveSource;
     if (source == null || !recording.hasFile) {
       return null;
+    }
+    final session = _htspSession;
+    if (session != null && !session.isClosed) {
+      return session.recordingUrl(recording.uuid);
     }
     final client = TvhClient(source);
     try {

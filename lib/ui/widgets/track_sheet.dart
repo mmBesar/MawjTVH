@@ -73,11 +73,9 @@ class _TrackSheet extends StatelessWidget {
                     _Empty(text: strings.noTracks)
                   else
                     for (var i = 0; i < audio.length; i++)
-                      RadioListTile<bool>(
-                        value: true,
-                        groupValue: selected.audio.id == audio[i].id,
-                        onChanged: (_) =>
-                            unawaited(player.setAudioTrack(audio[i])),
+                      _Choice(
+                        selected: selected.audio.id == audio[i].id,
+                        onTap: () => unawaited(player.setAudioTrack(audio[i])),
                         title: BidiText(
                           _label(
                             context,
@@ -90,10 +88,9 @@ class _TrackSheet extends StatelessWidget {
                       ),
                   const SizedBox(height: 8),
                   _Heading(text: strings.subtitleTracks),
-                  RadioListTile<bool>(
-                    value: true,
-                    groupValue: selected.subtitle.id == 'no',
-                    onChanged: (_) =>
+                  _Choice(
+                    selected: selected.subtitle.id == 'no',
+                    onTap: () =>
                         unawaited(player.setSubtitleTrack(SubtitleTrack.no())),
                     title: Text(strings.subtitlesOff),
                   ),
@@ -101,10 +98,9 @@ class _TrackSheet extends StatelessWidget {
                     _Empty(text: strings.noTracks)
                   else
                     for (var i = 0; i < subtitles.length; i++)
-                      RadioListTile<bool>(
-                        value: true,
-                        groupValue: selected.subtitle.id == subtitles[i].id,
-                        onChanged: (_) => unawaited(
+                      _Choice(
+                        selected: selected.subtitle.id == subtitles[i].id,
+                        onTap: () => unawaited(
                           player.setSubtitleTrack(subtitles[i]),
                         ),
                         title: BidiText(
@@ -190,3 +186,31 @@ String trackLabel(
       title: title,
       codec: codec,
     );
+
+/// One selectable line: a radio mark and a title (the sheet's own, so it does
+/// not depend on the radio widgets that Flutter is replacing).
+class _Choice extends StatelessWidget {
+  const _Choice({
+    required this.selected,
+    required this.onTap,
+    required this.title,
+  });
+
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget title;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      onTap: onTap,
+      leading: Icon(
+        selected
+            ? Icons.radio_button_checked_rounded
+            : Icons.radio_button_unchecked_rounded,
+        color: selected ? Theme.of(context).colorScheme.primary : null,
+      ),
+      title: title,
+    );
+  }
+}

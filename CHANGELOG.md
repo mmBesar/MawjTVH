@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.8
+
+- Recordings play over HTSP: the app's local stream proxy reads the file from the server with HTSP `fileOpen`/`fileRead` and serves it to the player with byte ranges (so seeking works). Accounts without the web interface permission can now watch their recordings. Servers set to HTTP-only still use the web address.
+- The audio and subtitle sheet no longer uses the deprecated radio widgets.
+- The image loader's user agent follows the app version.
+- New test: a fake HTSP server hands out a file and the proxy is checked for full, ranged, tail, open-ended and out-of-range requests.
+
 ## 0.1.7
 
 - Releases no longer rebuild everything: pushing a tag runs a separate `Release` workflow that publishes the files from the green build of that commit (see docs/BUILDING.md).

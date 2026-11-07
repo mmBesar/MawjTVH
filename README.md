@@ -52,7 +52,7 @@ account on.
 - **Guide.** Timeline guide with episode, year, rating, credits and
   new/repeat/HD badges from the server's EPG.
 - **Recordings.** Upcoming, finished and failed; record a programme, a series,
-  or "record now" from the player.
+  or "record now" from the player. Play them over HTSP too, with seeking.
 - **Channel views.** Cards, list, compact and a logo wall; favourites, recents
   and Tvheadend tags, remembered between runs.
 - **Interface size** for the whole app and for the guide, so it reads well on
@@ -87,8 +87,10 @@ This is development software and I test it on my own setup only.
 - HTSP streaming, tuner release, subtitles and the on-screen display are
   verified on my server, but not on every kind of Tvheadend setup.
 - Digest authentication is not supported yet (plain or "both" is).
-- Timeshift, playing recordings over HTSP, Android TV remote support and
-  teletext are on the roadmap, not done.
+- Recordings play over HTSP, but a recording that is still being made plays
+  only up to the point it had reached when you opened it.
+- Timeshift, Android TV remote support and teletext are on the roadmap, not
+  done.
 - Passwords are kept in the app's preferences on the device, not encrypted.
 
 ## Install
