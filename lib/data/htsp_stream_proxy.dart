@@ -236,7 +236,7 @@ Future<void> _serveRecording(
       final id = fileId;
       if (id != null && !connection.isClosed) {
         unawaited(
-          _connection
+          connection
               .request(
                 'fileClose',
                 <String, Object?>{'id': id},
