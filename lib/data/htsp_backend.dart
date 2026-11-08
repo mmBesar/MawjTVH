@@ -48,6 +48,11 @@ class HtspBackend {
   final Map<int, Set<int>> _extraIds = <int, Set<int>>{};
   final Map<int, Future<void>> _extraBusy = <int, Future<void>>{};
 
+  /// The end of the latest programme the server has shown us; says how many
+  /// days ahead its guide reaches. Null until the first look.
+  DateTime? _guideEnd;
+  DateTime? get guideEnd => _guideEnd;
+
   /// Fires (debounced) whenever channels, guide or recordings changed.
   Stream<void> get changes => _changes.stream;
 
@@ -94,6 +99,7 @@ class HtspBackend {
     try {
       await backend._enable();
       await backend._synced.future.timeout(syncTimeout, onTimeout: () {});
+      unawaited(backend._probeGuideEnd());
     } catch (_) {
       await backend.close();
       rethrow;
@@ -150,10 +156,64 @@ class HtspBackend {
     return job;
   }
 
+  /// Asks a few channels for three weeks of guide to learn how far ahead the
+  /// server's guide reaches, so the guide offers exactly those days.
+  Future<void> _probeGuideEnd() async {
+    try {
+      final ids = <int>[];
+      for (final event in _events.values) {
+        final channelId = _int(event['channelId']);
+        if (channelId != null &&
+            _channels.containsKey(channelId) &&
+            !ids.contains(channelId)) {
+          ids.add(channelId);
+          if (ids.length >= 3) {
+            break;
+          }
+        }
+      }
+      final until = DateTime.now().add(const Duration(days: 21));
+      await Future.wait(<Future<void>>[
+        for (final id in ids) ensureEvents('$id', until),
+      ]);
+      var latest = 0;
+      for (final event in _events.values) {
+        final stop = _int(event['stop']);
+        if (stop != null && stop > latest) {
+          latest = stop;
+        }
+      }
+      if (latest > 0) {
+        _guideEnd = DateTime.fromMillisecondsSinceEpoch(latest * 1000);
+        _notify();
+      }
+    } catch (error) {
+      debugPrint('Could not find where the guide ends: $error');
+    }
+  }
+
   Future<void> _fetchEvents(int id, DateTime until) async {
     try {
+      // While the earlier fetch is fresh, carry on from its last programme
+      // instead of downloading the channel's whole guide again.
+      var chainFrom = 0;
+      final freshAt = _extraAt[id];
+      final known = _extraIds[id];
+      if (freshAt != null &&
+          known != null &&
+          known.isNotEmpty &&
+          DateTime.now().difference(freshAt) < const Duration(minutes: 20)) {
+        var latestStart = -1;
+        for (final eventId in known) {
+          final start = _int(_events[eventId]?['start']);
+          if (start != null && start > latestStart) {
+            latestStart = start;
+            chainFrom = eventId;
+          }
+        }
+      }
       final reply = await _connection.request('getEvents', <String, Object?>{
-        'channelId': id,
+        if (chainFrom != 0) 'eventId': chainFrom else 'channelId': id,
         'maxTime': until.millisecondsSinceEpoch ~/ 1000,
       });
       final rows = reply['events'];
@@ -170,13 +230,16 @@ class HtspBackend {
         }
       }
       final old = _extraIds[id] ?? const <int>{};
-      // Events fetched earlier that the server no longer lists are gone.
-      for (final eventId in old) {
-        if (!returned.containsKey(eventId)) {
-          _events.remove(eventId);
+      if (chainFrom == 0) {
+        // A full fetch: events fetched earlier that the server no longer
+        // lists are gone.
+        for (final eventId in old) {
+          if (!returned.containsKey(eventId)) {
+            _events.remove(eventId);
+          }
         }
       }
-      final fresh = <int>{};
+      final fresh = <int>{if (chainFrom != 0) ...old};
       for (final entry in returned.entries) {
         // Events inside the pushed range are kept up to date by the server;
         // only the ones beyond it belong to this fetch.
@@ -187,7 +250,9 @@ class HtspBackend {
       }
       _extraIds[id] = fresh;
       _extraUntil[id] = until;
-      _extraAt[id] = DateTime.now();
+      if (chainFrom == 0) {
+        _extraAt[id] = DateTime.now();
+      }
       _notify();
     } catch (error) {
       debugPrint('Guide fetch for channel $id failed: $error');

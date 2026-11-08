@@ -230,6 +230,24 @@ extension TvhStrings on AppStrings {
     return '$name ${day.day}';
   }
 
+  String get searchChannelsHint => isArabic
+      ? 'اسم القناة أو رقمها أو مجموعتها'
+      : 'Channel name, number or group';
+  String get searchGuideHint => isArabic
+      ? 'برنامج أو حلقة أو تصنيف'
+      : 'Programme, episode or category';
+  String get yesterday => isArabic ? 'أمس' : 'Yesterday';
+  String get guidePastNote => isArabic
+      ? 'الأيام الماضية تُعرض من الذاكرة المحفوظة على هذا الجهاز: ما رآه التطبيق أثناء تشغيله.'
+      : 'Past days come from what this device remembers: the programmes the app saw while it was running.';
+  String get guideDaysBackLabel =>
+      isArabic ? 'الأيام الماضية في الدليل' : 'Past guide days to keep';
+  String get guideDaysBackHelp => isArabic
+      ? 'يحذف Tvheadend البرامج المنتهية سريعًا، لذا يحفظ التطبيق ما رآه على الجهاز ليعرضه في الأيام الماضية. الصفر يعطّل ذلك ويحذف المحفوظ.'
+      : 'Tvheadend deletes programmes soon after they end, so the app keeps what it saw on this device to show past days. Zero turns it off and removes what was saved.';
+  String daysCount(int days) => isArabic
+      ? (days == 0 ? 'معطّل' : '$days يوم')
+      : (days == 0 ? 'Off' : (days == 1 ? '1 day' : '$days days'));
   String get seekBack10 => isArabic ? 'رجوع ١٠ ثوانٍ' : 'Back 10 s';
   String get seekForward10 => isArabic ? 'تقدّم ١٠ ثوانٍ' : 'Forward 10 s';
   String get resetPictureLabel =>

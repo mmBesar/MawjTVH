@@ -390,7 +390,8 @@ EOF
       return 1
     }
     echo "Downloading appimagetool for $APPIMAGE_ARCH"
-    curl -fsSL \
+    # GitHub's download servers answer 502/504 now and then; try again.
+    curl -fsSL --retry 6 --retry-all-errors --retry-delay 10 \
       "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${APPIMAGE_ARCH}.AppImage" \
       -o "$tool"
     chmod +x "$tool"

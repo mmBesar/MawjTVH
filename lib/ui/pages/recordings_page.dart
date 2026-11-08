@@ -90,14 +90,17 @@ class _RecordingsPageState extends State<RecordingsPage> {
   }
 
   bool _matches(TvhRecording recording) {
-    final needle = normalizeForSearch(_query);
-    if (needle.isEmpty) {
+    final tokens = searchTokens(_query);
+    if (tokens.isEmpty) {
       return true;
     }
-    return normalizeForSearch(
-      '${recording.title} ${recording.subtitle} ${recording.channelName} '
-      '${recording.description}',
-    ).contains(needle);
+    return matchesAllTokens(
+      foldForSearch(
+        '${recording.title} ${recording.subtitle} ${recording.channelName} '
+        '${recording.description}',
+      ),
+      tokens,
+    );
   }
 
   List<TvhRecording> _filter(List<TvhRecording> all) {
@@ -389,10 +392,11 @@ class _RecordingsPageState extends State<RecordingsPage> {
         body: _localError!,
       );
     }
-    final needle = normalizeForSearch(_query);
+    final tokens = searchTokens(_query);
     final files = _local!
         .where((file) =>
-            needle.isEmpty || normalizeForSearch(file.name).contains(needle))
+            tokens.isEmpty ||
+            matchesAllTokens(foldForSearch(file.name), tokens))
         .toList();
     if (files.isEmpty) {
       return EmptyState(

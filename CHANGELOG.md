@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.24
+
+- Desktop: pages are drawn smaller (the automatic interface size is 100% instead of 120%, and the guide no longer stacks its own extra zoom on top). The sidebar keeps its size. Interface size now also offers 80% and 90%.
+- Guide, future: the day chips reach as far as the server's guide does. After connecting, the app asks three channels for three weeks of guide and offers exactly the days that exist (a week until it knows). Later days are fetched per visible channel and carried on from the last programme instead of downloaded again.
+- Guide, past: day chips for earlier days. Tvheadend deletes programmes soon after they end, so the app keeps its own history on the device: while it runs it copies every programme that has started into one small file per day, and reads a day back only when you open it. Setting "Past guide days to keep" (off, 1, 2, 3, 5, 7, 14; default 3) decides how many days are kept; off deletes what was saved. Days from before this version can't be shown.
+- Search: punctuation, accents and word order no longer matter ("man united" finds "Man. United"), and when nothing matches exactly, small typos are forgiven ("manchster"). Used in channel search, guide search and the recordings list.
+- Search page: a Channels / Programmes switch, with a hint that says what each searches. Channel search opened from Watch still looks at channels; the Guide's opens on programmes.
+- Android: tapping a far tab (Settings) the first time could end up on Favorites, because the slide passed through and built every page in between. Far tabs now jump straight to the page.
+- Release: before publishing, the release checks that the APK and the DEB, RPM and AppImage for amd64 and arm64 are all there (`tool/check_release_files.sh`). If something is missing it starts a new Build on the tag, waits, and publishes from that, or stops without releasing. The AppImage tool download retries on GitHub errors, which is the likely reason an ARM64 AppImage went missing.
+
 ## 0.1.23
 
 - The guide has day chips (Today, Tomorrow, then Wed 11 and so on, up to a week). Today keeps the running timeline; any other day shows midnight to midnight.

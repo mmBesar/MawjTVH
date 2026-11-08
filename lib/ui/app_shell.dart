@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../core/app_info.dart';
 import '../core/platform.dart';
 import '../core/theme.dart';
+import '../core/ui_zoom.dart';
 import '../data/app_state.dart';
 import '../l10n/strings.dart';
 import '../l10n/tvh_strings.dart';
@@ -31,6 +32,10 @@ class _AppShellState extends State<AppShell> {
   int _index = 0;
   final PageController _pageController = PageController();
 
+  /// The page a tap on the bar is taking the view to. While it is set, pages
+  /// the animation merely passes do not change the selected tab.
+  int? _navTarget;
+
   @override
   void initState() {
     super.initState();
@@ -51,13 +56,36 @@ class _AppShellState extends State<AppShell> {
   void _goTo(int index) {
     setState(() => _index = index);
     if (!kIsDesktop && _pageController.hasClients) {
-      unawaited(
-        _pageController.animateToPage(
-          index,
-          duration: const Duration(milliseconds: 280),
-          curve: Curves.easeOutCubic,
-        ),
-      );
+      final current = _pageController.page?.round() ?? _index;
+      if ((current - index).abs() > 1) {
+        // Sliding past the pages in between builds each of them for the
+        // first time and used to end on the wrong tab (Settings landed on
+        // Favorites); go straight there.
+        _navTarget = null;
+        _pageController.jumpToPage(index);
+      } else {
+        _navTarget = index;
+        unawaited(
+          _pageController
+              .animateToPage(
+                index,
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeOutCubic,
+              )
+              .whenComplete(() {
+            if (_navTarget == index) {
+              _navTarget = null;
+            }
+            // Not while a finger has taken over the view.
+            if (mounted &&
+                _pageController.hasClients &&
+                !_pageController.position.isScrollingNotifier.value &&
+                _pageController.page?.round() != index) {
+              _pageController.jumpToPage(index);
+            }
+          }),
+        );
+      }
     }
     if (index == _recordingsIndex) {
       unawaited(context.read<AppState>().loadRecordings());
@@ -210,7 +238,7 @@ class _AppShellState extends State<AppShell> {
             controller: _pageController,
             physics: const ClampingScrollPhysics(),
             onPageChanged: (index) {
-              if (index != _index) {
+              if (_navTarget == null && index != _index) {
                 setState(() => _index = index);
               }
             },
@@ -221,6 +249,9 @@ class _AppShellState extends State<AppShell> {
       ],
     );
 
+    final sidebarZoom = sidebarExtraScale(
+      context.select<AppState, double>((state) => state.settings.uiScale),
+    );
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= 900) {
@@ -228,13 +259,19 @@ class _AppShellState extends State<AppShell> {
           return Scaffold(
             body: Row(
               children: <Widget>[
-                _Sidebar(
-                  compact: compact,
-                  labels: labels,
-                  icons: icons,
-                  selected: _index,
-                  onSelected: _goTo,
-                  onOpenSources: _openSources,
+                SizedBox(
+                  width: (compact ? 76 : 244) * sidebarZoom,
+                  child: UiZoom(
+                    scale: sidebarZoom,
+                    child: _Sidebar(
+                      compact: compact,
+                      labels: labels,
+                      icons: icons,
+                      selected: _index,
+                      onSelected: _goTo,
+                      onOpenSources: _openSources,
+                    ),
+                  ),
                 ),
                 Expanded(child: content),
               ],

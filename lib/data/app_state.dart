@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import '../core/catppuccin.dart';
 import '../core/text.dart';
 import 'htsp_backend.dart';
+import 'guide_history.dart';
 import 'htsp_connection.dart';
 import 'models.dart';
 import 'storage.dart';
@@ -190,6 +191,7 @@ class AppState extends ChangeNotifier {
       if (++_tick % 2 == 0 && _content != null) {
         unawaited(loadRecordings(quiet: true));
       }
+      _captureHistory();
     });
     notifyListeners();
 
@@ -341,11 +343,113 @@ class AppState extends ChangeNotifier {
   /// True while the native HTSP session is connected.
   bool get usesHtsp => _htspSession != null && !_htspSession!.isClosed;
 
-  /// How many days (today included) the guide can show. Over HTSP any day the
-  /// server has guide data for can be fetched on demand; with the web API the
-  /// guide holds only what was loaded, which the guide-hours setting decides.
-  int get guideDays =>
-      usesHtsp ? 7 : ((_settings.guideHours + 2) / 24).ceil().clamp(1, 7);
+  /// How many days (today included) the guide can show. Over HTSP that is as
+  /// far as the server's guide reaches (found by asking a few channels for
+  /// three weeks; a week until then); with the web API the guide holds only
+  /// what was loaded, which the guide-hours setting decides.
+  int get guideDays {
+    if (!usesHtsp) {
+      return ((_settings.guideHours + 2) / 24).ceil().clamp(1, 7);
+    }
+    final end = _htspSession?.guideEnd;
+    if (end == null) {
+      return 7;
+    }
+    final today = DateTime(_now.year, _now.month, _now.day);
+    final last = DateTime(end.year, end.month, end.day);
+    return ((last.difference(today).inHours / 24).round() + 1)
+        .clamp(1, 21)
+        .toInt();
+  }
+
+  /// How many past days the guide offers (what the device remembers).
+  int get guidePastDays => _settings.guideDaysBack;
+
+  final Map<String, GuideHistory> _histories = <String, GuideHistory>{};
+  final Set<String> _prunedHistories = <String>{};
+  DateTime _lastCapture = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastHistoryFlush = DateTime.fromMillisecondsSinceEpoch(0);
+
+  GuideHistory? _historyOf(String? sourceId) {
+    if (sourceId == null) {
+      return null;
+    }
+    return _histories.putIfAbsent(sourceId, () => GuideHistory(sourceId));
+  }
+
+  /// Copies the programmes that have started into the on-device history, at
+  /// most once a minute; the files are written every few minutes.
+  void _captureHistory({bool force = false}) {
+    final content = _content;
+    final history = _historyOf(activeSource?.id);
+    if (content == null || history == null) {
+      return;
+    }
+    if (_settings.guideDaysBack <= 0) {
+      // Switched off: remove what was saved, once.
+      if (_prunedHistories.add('${history.sourceId}:off')) {
+        unawaited(history.clear());
+      }
+      return;
+    }
+    final now = DateTime.now();
+    if (!force && now.difference(_lastCapture) < const Duration(minutes: 1)) {
+      return;
+    }
+    _lastCapture = now;
+    if (_prunedHistories
+        .add('${history.sourceId}:${_settings.guideDaysBack}')) {
+      _prunedHistories.remove('${history.sourceId}:off');
+      unawaited(history.prune(_settings.guideDaysBack));
+    }
+    history.capture(content.epg.all, now);
+    if (force || now.difference(_lastHistoryFlush) > const Duration(minutes: 5)) {
+      _lastHistoryFlush = now;
+      unawaited(history.flush());
+    }
+  }
+
+  /// Loads the remembered programmes of a past window before it is drawn.
+  Future<void> prepareGuideHistory(DateTime from, DateTime to) async {
+    _captureHistory(force: true);
+    final history = _historyOf(activeSource?.id);
+    if (history == null) {
+      return;
+    }
+    await history.prepare(from, to);
+    if (!_disposed) {
+      notifyListeners();
+    }
+  }
+
+  /// [channel]'s programmes in the window: the live guide, plus what the
+  /// device remembers for the part that has already aired.
+  List<Programme> programmesInWindow(
+    Channel channel,
+    DateTime from,
+    DateTime to,
+  ) {
+    final live = epg.forWindow(channel, from, to);
+    if (from.isAfter(_now) || _settings.guideDaysBack <= 0) {
+      return live;
+    }
+    final history = _histories[activeSource?.id];
+    if (history == null) {
+      return live;
+    }
+    final past = history.forWindow(channel.id, from, to);
+    if (past.isEmpty) {
+      return live;
+    }
+    final starts = <int>{
+      for (final programme in live) programme.start.millisecondsSinceEpoch,
+    };
+    return <Programme>[
+      for (final programme in past)
+        if (!starts.contains(programme.start.millisecondsSinceEpoch)) programme,
+      ...live,
+    ]..sort((a, b) => a.start.compareTo(b.start));
+  }
 
   /// Asks the server for [channel]'s programmes up to [until] when the guide
   /// is showing a day beyond what is already loaded. Safe to call on every
@@ -423,6 +527,7 @@ class AppState extends ChangeNotifier {
     }
     _recordings = backend.recordings();
     _recordingsError = null;
+    _captureHistory();
     notifyListeners();
   }
 
@@ -481,44 +586,66 @@ class AppState extends ChangeNotifier {
     await _storage.saveRecents(channel.sourceId, next);
   }
 
-  /// Channels whose name, number or group contains [query].
+  final Expando<String> _foldedProgramme = Expando<String>();
+  final Expando<String> _foldedChannel = Expando<String>();
+
+  /// Channels whose name, number or group matches every word of [query], in
+  /// any order and ignoring punctuation and accents ("man united" finds
+  /// "Man. United"). When nothing matches that way, small typos are allowed.
   List<Channel> searchChannels(String query) {
-    final needle = normalizeForSearch(query);
-    if (needle.isEmpty) {
+    final tokens = searchTokens(query);
+    if (tokens.isEmpty) {
       return const <Channel>[];
     }
-    return channels.where((channel) {
-      return normalizeForSearch(channel.name).contains(needle) ||
-          channel.number == needle ||
-          normalizeForSearch(channel.group ?? '').contains(needle);
+    final number = query.trim();
+    String folded(Channel channel) => _foldedChannel[channel] ??=
+        foldForSearch('${channel.name} ${channel.group ?? ''}');
+    final exact = channels.where((channel) {
+      return channel.number == number || matchesAllTokens(folded(channel), tokens);
     }).toList(growable: false);
+    if (exact.isNotEmpty) {
+      return exact;
+    }
+    return channels
+        .where((channel) => matchesSimilar(folded(channel), tokens))
+        .toList(growable: false);
   }
 
   /// Programmes still on or yet to start whose title, sub-title or category
-  /// contains [query], soonest first.
+  /// matches every word of [query] (see [searchChannels] for how forgiving
+  /// that is), soonest first.
   List<ProgrammeHit> searchProgrammes(String query, {int limit = 60}) {
-    final needle = normalizeForSearch(query);
-    if (needle.length < 2) {
+    final tokens = searchTokens(query);
+    if (tokens.isEmpty || foldForSearch(query).length < 2) {
       return const <ProgrammeHit>[];
     }
-    final hits = <ProgrammeHit>[];
+    final candidates = <({Programme programme, String folded})>[];
     for (final programme in epg.all) {
-      if (!programme.stop.isAfter(_now)) {
+      if (!programme.stop.isAfter(_now) ||
+          !_channelById.containsKey(programme.channelId)) {
         continue;
       }
-      final channel = _channelById[programme.channelId];
-      if (channel == null) {
-        continue;
-      }
-      final haystack = normalizeForSearch(
+      final folded = _foldedProgramme[programme] ??= foldForSearch(
         '${programme.title} ${programme.subTitle ?? ''} '
         '${programme.categories.join(' ')}',
       );
-      if (haystack.contains(needle)) {
-        hits.add(ProgrammeHit(channel: channel, programme: programme));
-      }
+      candidates.add((programme: programme, folded: folded));
     }
-    hits.sort((a, b) => a.programme.start.compareTo(b.programme.start));
+    var matched = candidates
+        .where((entry) => matchesAllTokens(entry.folded, tokens))
+        .toList(growable: false);
+    if (matched.isEmpty) {
+      matched = candidates
+          .where((entry) => matchesSimilar(entry.folded, tokens))
+          .toList(growable: false);
+    }
+    final hits = <ProgrammeHit>[
+      for (final entry in matched)
+        ProgrammeHit(
+          channel: _channelById[entry.programme.channelId]!,
+          programme: entry.programme,
+        ),
+    ]..sort((a, b) => a.programme.start.compareTo(b.programme.start));
     return hits.length > limit ? hits.sublist(0, limit) : hits;
   }
 

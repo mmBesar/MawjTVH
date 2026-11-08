@@ -5,7 +5,8 @@ void main() {
   test('zoom steps move one notch and stop at the ends', () {
     expect(stepUiScale(1.2, 1), 1.3);
     expect(stepUiScale(1.2, -1), 1.1);
-    expect(stepUiScale(1.0, -1), 1.0);
+    expect(stepUiScale(1.0, -1), 0.9);
+    expect(stepUiScale(0.8, -1), 0.8);
     expect(stepUiScale(1.8, 1), 1.8);
   });
 

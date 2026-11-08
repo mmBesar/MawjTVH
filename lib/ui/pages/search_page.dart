@@ -42,6 +42,7 @@ class _SearchPageState extends State<SearchPage> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focus = FocusNode();
   String _query = '';
+  late SearchScope _scope = widget.scope;
 
   @override
   void initState() {
@@ -83,10 +84,10 @@ class _SearchPageState extends State<SearchPage> {
         body: strings.searchEmptyBody,
       );
     } else {
-      final channels = widget.scope == SearchScope.channels
+      final channels = _scope == SearchScope.channels
           ? state.searchChannels(query)
           : const <Channel>[];
-      final programmes = widget.scope == SearchScope.programmes
+      final programmes = _scope == SearchScope.programmes
           ? state.searchProgrammes(query)
           : const <ProgrammeHit>[];
       if (channels.isEmpty && programmes.isEmpty) {
@@ -136,7 +137,7 @@ class _SearchPageState extends State<SearchPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.scope == SearchScope.channels
+          _scope == SearchScope.channels
               ? strings.searchChannelsTitle
               : strings.searchGuideTitle,
         ),
@@ -155,7 +156,9 @@ class _SearchPageState extends State<SearchPage> {
               autocorrect: false,
               style: theme.textTheme.titleMedium,
               decoration: InputDecoration(
-                hintText: strings.searchHint,
+                hintText: _scope == SearchScope.channels
+                    ? strings.searchChannelsHint
+                    : strings.searchGuideHint,
                 prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: _query.isEmpty
                     ? null
@@ -165,6 +168,28 @@ class _SearchPageState extends State<SearchPage> {
                         icon: Icon(Icons.close_rounded, color: colors.subtext0),
                       ),
               ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Row(
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 8),
+                  child: ChoiceChip(
+                    label: Text(strings.channelsLabel),
+                    selected: _scope == SearchScope.channels,
+                    onSelected: (_) =>
+                        setState(() => _scope = SearchScope.channels),
+                  ),
+                ),
+                ChoiceChip(
+                  label: Text(strings.programmesLabel),
+                  selected: _scope == SearchScope.programmes,
+                  onSelected: (_) =>
+                      setState(() => _scope = SearchScope.programmes),
+                ),
+              ],
             ),
           ),
           Expanded(child: body),

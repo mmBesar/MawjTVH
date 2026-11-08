@@ -4,14 +4,40 @@ import 'package:flutter/services.dart';
 import 'platform.dart';
 
 /// Zoom steps offered for the whole interface.
-const List<double> kUiScaleSteps = <double>[1.0, 1.1, 1.2, 1.3, 1.45, 1.6, 1.8];
+const List<double> kUiScaleSteps = <double>[
+  0.8,
+  0.9,
+  1.0,
+  1.1,
+  1.2,
+  1.3,
+  1.45,
+  1.6,
+  1.8,
+];
 
-/// The scale to use: the chosen one, or a roomier default on desktop.
+/// What "Auto" means on desktop: the pages are drawn at their natural size.
+const double kDesktopPageScale = 1.0;
+
+/// The desktop sidebar keeps the size it always had (it was drawn at 1.2),
+/// whatever the pages next to it are scaled to under "Auto".
+const double kDesktopSidebarScale = 1.2;
+
+/// The scale to use: the chosen one, or the desktop default.
 double effectiveUiScale(double chosen) {
   if (chosen > 0) {
     return chosen.clamp(0.8, 2.2).toDouble();
   }
-  return kIsDesktop ? 1.2 : 1.0;
+  return kIsDesktop ? kDesktopPageScale : 1.0;
+}
+
+/// Extra zoom for the desktop sidebar on top of [effectiveUiScale]. Only
+/// under "Auto": a size the person chose scales everything alike.
+double sidebarExtraScale(double chosen) {
+  if (chosen > 0 || !kIsDesktop) {
+    return 1.0;
+  }
+  return kDesktopSidebarScale / kDesktopPageScale;
 }
 
 /// The next zoom step above or below [current].

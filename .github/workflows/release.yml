@@ -1,8 +1,11 @@
 name: Release
 
 # Publishes a release from the build that already ran for the tagged commit.
-# Nothing is rebuilt: the APK was signed in that build, and the Linux bundles
-# were packaged there. Tagging therefore takes seconds.
+# Nothing is rebuilt when that build has every file: the APK was signed in
+# that build, and the Linux bundles were packaged there, so tagging takes
+# seconds. When a file is missing (a Linux job failed, an artifact expired),
+# the release starts a new Build on the tag, waits for it, and publishes from
+# that instead of releasing an incomplete set.
 #
 #   git tag -a v0.1.7 -m "MawjTVH 0.1.7" && git push origin v0.1.7
 #
@@ -24,7 +27,7 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  actions: write
 
 concurrency:
   group: release-${{ github.event.inputs.tag || github.ref_name }}
@@ -34,7 +37,7 @@ jobs:
   release:
     name: Publish release
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 150
     env:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ github.event.inputs.tag || github.ref_name }}
@@ -62,22 +65,59 @@ jobs:
           echo "Using Build run $run_id for $TAG ($sha)"
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
-      - name: Download the build files
-        run: |
-          set -euo pipefail
-          mkdir -p release
-          gh run download "${{ steps.build.outputs.run_id }}" --dir release-raw
-          find release-raw -type f -exec mv -t release {} +
-          ls -l release
-
-      - name: Check the files
+      - name: Download and check the build files
+        env:
+          RUN_ID: ${{ steps.build.outputs.run_id }}
+          PRIVATE: ${{ github.event.repository.private }}
         run: |
           set -euo pipefail
           version="${TAG#v}"
-          ls release/MawjTVH-"$version"-arm64-v8a.apk >/dev/null || {
-            echo "::error::The build has no APK for version $version. Does pubspec.yaml match the tag?"
-            exit 1
+          arm=()
+          if [[ "$PRIVATE" == "true" ]]; then
+            arm=(--no-arm64)
+          fi
+
+          collect() {
+            rm -rf release release-raw
+            mkdir release
+            gh run download "$1" --dir release-raw || true
+            if [[ -d release-raw ]]; then
+              find release-raw -type f -exec mv -t release {} +
+            fi
+            ls -l release
           }
+
+          collect "$RUN_ID"
+          if tool/check_release_files.sh release "$version" "${arm[@]}"; then
+            exit 0
+          fi
+
+          echo "::warning::Build run $RUN_ID is missing files; building $TAG again."
+          before="$(gh run list --workflow build.yml --event workflow_dispatch \
+            --limit 1 --json databaseId --jq '.[0].databaseId // 0')"
+          gh workflow run build.yml --ref "$TAG"
+          new=""
+          for _ in $(seq 1 30); do
+            sleep 10
+            latest="$(gh run list --workflow build.yml --event workflow_dispatch \
+              --limit 1 --json databaseId --jq '.[0].databaseId // 0')"
+            if [[ "$latest" -gt "$before" ]]; then
+              new="$latest"
+              break
+            fi
+          done
+          if [[ -z "$new" ]]; then
+            echo "::error::Could not start a new Build for $TAG."
+            exit 1
+          fi
+          echo "Waiting for Build run $new"
+          gh run watch "$new" --interval 30 --exit-status || true
+
+          collect "$new"
+          if ! tool/check_release_files.sh release "$version" "${arm[@]}"; then
+            echo "::error::The new build is still incomplete. Nothing was released; look at the failed jobs of run $new."
+            exit 1
+          fi
 
       - name: Write checksums
         run: |
