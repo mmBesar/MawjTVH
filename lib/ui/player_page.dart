@@ -448,6 +448,13 @@ class _PlayerPageState extends State<PlayerPage> {
       await _setMpvProperty('network-timeout', '90');
       await _setMpvProperty('tls-verify', allowInsecure ? 'no' : 'yes');
       await _setMpvProperty('demuxer-lavf-o', _demuxerLavfOptions);
+      if (_isVod) {
+        // A recording is read from a file, so mpv would otherwise pull minutes
+        // of it at full speed; keep the reading modest and steady.
+        await _setMpvProperty('demuxer-max-bytes', '33554432');
+        await _setMpvProperty('demuxer-readahead-secs', '20');
+        await _setMpvProperty('demuxer-max-back-bytes', '16777216');
+      }
       if (!mounted) {
         return;
       }
@@ -3341,6 +3348,12 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
   /// Seconds while the thumb is being dragged, otherwise null.
   double? _drag;
 
+  /// The position once per second. The player reports it for every frame,
+  /// and redrawing the bar that often costs the video its smoothness.
+  late final Stream<Duration> _positions = widget.player.stream.position
+      .map((position) => Duration(seconds: position.inSeconds))
+      .distinct();
+
   @override
   Widget build(BuildContext context) {
     const style = TextStyle(
@@ -3354,8 +3367,8 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
       builder: (context, durationSnapshot) {
         final total = durationSnapshot.data ?? widget.player.state.duration;
         return StreamBuilder<Duration>(
-          stream: widget.player.stream.position,
-          initialData: widget.player.state.position,
+          stream: _positions,
+          initialData: Duration(seconds: widget.player.state.position.inSeconds),
           builder: (context, positionSnapshot) {
             final position =
                 positionSnapshot.data ?? widget.player.state.position;

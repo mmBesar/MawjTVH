@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.17
+
+- Recordings in the built-in player: the seek bar was redrawn for every video frame (25 or more times a second, even while hidden), which live TV never does, and mpv read minutes of the file ahead at full speed. The bar now updates once a second and the read-ahead is limited to about 20 seconds and 32 MB. Aimed at the dropped frames seen on Linux with the recording that plays fine in the external mpv window.
+
 ## 0.1.16
 
 - HTSP messages are joined once when they are whole instead of being copied again for every piece that arrives; a block of a recording is now copied twice in total, not about five to thirty times. Reads ahead go back to four chunks.
