@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.21
+
+- The problem report (copy diagnostics) now shows how Flutter's own frames behaved while the page was open (how many, how many were slow to build or draw, the worst times) and how many video frames mpv dropped in each 5-second slice. This tells whether the drops come from Flutter's drawing or from mpv's rendering, and whether they come in bursts. No playback change.
+
 ## 0.1.20
 
 - The resume prompt has a Cancel button, and Escape cancels it: nothing plays and you go back. This applies to the built-in player's prompt and to the dialog shown before the mpv window opens (where Escape or a click outside also cancels).

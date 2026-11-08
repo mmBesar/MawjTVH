@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
+import 'dart:ui' as ui show FrameTiming;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -378,6 +379,56 @@ class _PlayerPageState extends State<PlayerPage> {
       const Duration(seconds: 15),
       (_) => _rememberPosition(),
     );
+    // Figures for the problem report: how Flutter's own frames and mpv's
+    // dropped frames behave while this page is open.
+    WidgetsBinding.instance.addTimingsCallback(_onFrameTimings);
+    _statsTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => unawaited(_sampleDrops()),
+    );
+  }
+
+  Timer? _statsTimer;
+  final List<int> _dropSamples = <int>[];
+  int _uiFrames = 0;
+  int _slowBuilds = 0;
+  int _slowRasters = 0;
+  int _worstBuildMs = 0;
+  int _worstRasterMs = 0;
+
+  void _onFrameTimings(List<ui.FrameTiming> timings) {
+    for (final timing in timings) {
+      _uiFrames++;
+      final build = timing.buildDuration.inMilliseconds;
+      final raster = timing.rasterDuration.inMilliseconds;
+      if (build > 16) {
+        _slowBuilds++;
+      }
+      if (raster > 16) {
+        _slowRasters++;
+      }
+      _worstBuildMs = math.max(_worstBuildMs, build);
+      _worstRasterMs = math.max(_worstRasterMs, raster);
+    }
+  }
+
+  Future<void> _sampleDrops() async {
+    final platform = _player.platform;
+    if (platform is! NativePlayer || !_playing) {
+      return;
+    }
+    try {
+      final value = await platform.getProperty('frame-drop-count');
+      final count = int.tryParse(value);
+      if (count != null) {
+        _dropSamples.add(count);
+        if (_dropSamples.length > 40) {
+          _dropSamples.removeAt(0);
+        }
+      }
+    } catch (_) {
+      // The report simply has fewer samples.
+    }
   }
 
   /// Keeps where a recording has got to, so it can be resumed later.
@@ -1544,6 +1595,19 @@ class _PlayerPageState extends State<PlayerPage> {
       }
     }
 
+    buffer.writeln(
+      'Flutter frames: $_uiFrames, build over 16 ms: $_slowBuilds, '
+      'raster over 16 ms: $_slowRasters, worst build $_worstBuildMs ms, '
+      'worst raster $_worstRasterMs ms',
+    );
+    if (_dropSamples.length > 1) {
+      final steps = <int>[
+        for (var i = 1; i < _dropSamples.length; i++)
+          _dropSamples[i] - _dropSamples[i - 1],
+      ];
+      buffer.writeln('Dropped video frames per 5 s: ${steps.join(' ')}');
+    }
+
     final platform = _player.platform;
     if (platform is NativePlayer) {
       const properties = <String>[
@@ -1671,6 +1735,8 @@ class _PlayerPageState extends State<PlayerPage> {
     // Silence first, before anything else that could throw: stopping ends
     // playback at once, even if the player takes a while to shut down.
     _positionTimer?.cancel();
+    _statsTimer?.cancel();
+    WidgetsBinding.instance.removeTimingsCallback(_onFrameTimings);
     final choice = _resumeChoice;
     if (choice != null && !choice.isCompleted) {
       choice.complete(null);

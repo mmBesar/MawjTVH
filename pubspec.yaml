@@ -1,7 +1,7 @@
 name: mawjtvh
 description: A Tvheadend client for Android and Linux with a fast guide, recordings and a proper player.
 publish_to: "none"
-version: 0.1.20+24
+version: 0.1.21+25
 
 environment:
   sdk: ">=3.13.0 <4.0.0"
