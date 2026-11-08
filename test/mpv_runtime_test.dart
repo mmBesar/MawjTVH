@@ -62,6 +62,21 @@ Note: something else, not a value.
     expect(arguments.join(' '), isNot(contains('strict=experimental')));
   });
 
+  test('starts a resumed recording at the saved point', () {
+    final arguments = MpvRuntime.buildArguments(
+      capabilities: capabilities,
+      title: 't',
+      ipcPath: 's',
+      hwdec: 'auto-safe',
+      videoOutput: 'auto',
+      allowInsecure: false,
+      useUserConfig: true,
+      fullscreen: false,
+      startAt: const Duration(minutes: 29, seconds: 48),
+    );
+    expect(arguments, contains('--start=1788'));
+  });
+
   test('falls back to auto-safe for a decoder the system does not list', () {
     final arguments = MpvRuntime.buildArguments(
       capabilities: capabilities,

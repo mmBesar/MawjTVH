@@ -288,6 +288,7 @@ class MpvRuntime {
     required bool allowInsecure,
     required bool useUserConfig,
     required bool fullscreen,
+    Duration? startAt,
   }) {
     // The person's own mpv is used as it is: their mpv.conf, scripts and
     // defaults apply. Only what the app has to control is passed, and the
@@ -313,6 +314,8 @@ class MpvRuntime {
       if (capabilities.supportsWaylandAppId)
         '--wayland-app-id=com.mmbesar.mawjtvh.player',
       if (fullscreen) '--fs',
+      if (startAt != null && startAt > Duration.zero)
+        '--start=${startAt.inSeconds}',
     ];
   }
 
@@ -326,6 +329,7 @@ class MpvRuntime {
     required bool allowInsecure,
     required bool useUserConfig,
     required bool fullscreen,
+    Duration? startAt,
   }) async {
     final runtimeDir = Platform.environment['XDG_RUNTIME_DIR'];
     final base = runtimeDir != null && Directory(runtimeDir).existsSync()
@@ -350,6 +354,7 @@ class MpvRuntime {
       allowInsecure: allowInsecure,
       useUserConfig: useUserConfig,
       fullscreen: fullscreen,
+      startAt: startAt,
     );
     final process = await Process.start(
       capabilities.path,

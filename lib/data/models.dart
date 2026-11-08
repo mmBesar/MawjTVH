@@ -327,6 +327,7 @@ class AppSettings {
     required this.use24HourTime,
     this.activeSourceId,
     this.useMpvWindow = false,
+    this.recordingsInMpv = true,
     this.hwdec = 'auto-safe',
     this.videoOutput = 'auto',
     this.useMpvConfig = true,
@@ -366,6 +367,10 @@ class AppSettings {
   /// Desktop only: play in a separate native mpv window (true) or inside
   /// the app with the built-in renderer (false).
   final bool useMpvWindow;
+
+  /// Desktop only: recordings open in the mpv window even when live TV plays
+  /// inside the app.
+  final bool recordingsInMpv;
 
   /// mpv `--hwdec` value, picked from what the system reports.
   final String hwdec;
@@ -439,6 +444,7 @@ class AppSettings {
     bool? use24HourTime,
     Object? activeSourceId = _unset,
     bool? useMpvWindow,
+    bool? recordingsInMpv,
     String? hwdec,
     String? videoOutput,
     bool? useMpvConfig,
@@ -470,6 +476,7 @@ class AppSettings {
           ? this.activeSourceId
           : activeSourceId as String?,
       useMpvWindow: useMpvWindow ?? this.useMpvWindow,
+      recordingsInMpv: recordingsInMpv ?? this.recordingsInMpv,
       hwdec: hwdec ?? this.hwdec,
       videoOutput: videoOutput ?? this.videoOutput,
       useMpvConfig: useMpvConfig ?? this.useMpvConfig,
@@ -502,6 +509,7 @@ class AppSettings {
         'use24HourTime': use24HourTime,
         'activeSourceId': activeSourceId,
         'useMpvWindow': useMpvWindow,
+        'recordingsInMpv': recordingsInMpv,
         'hwdec': hwdec,
         'videoOutput': videoOutput,
         'useMpvConfig': useMpvConfig,
@@ -545,6 +553,7 @@ class AppSettings {
       use24HourTime: json['use24HourTime'] as bool? ?? false,
       activeSourceId: json['activeSourceId'] as String?,
       useMpvWindow: json['useMpvWindow'] as bool? ?? false,
+      recordingsInMpv: json['recordingsInMpv'] as bool? ?? true,
       hwdec: json['hwdec'] as String? ?? 'auto-safe',
       videoOutput: json['videoOutput'] as String? ?? 'auto',
       useMpvConfig: json['useMpvConfig'] as bool? ?? true,

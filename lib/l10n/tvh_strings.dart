@@ -205,6 +205,11 @@ extension TvhStrings on AppStrings {
   String get onWord => isArabic ? 'تشغيل' : 'On';
   String get offWord => isArabic ? 'إيقاف' : 'Off';
   String get audioDelayLabel => isArabic ? 'تأخير الصوت' : 'Audio delay';
+  String get recordingsInMpv =>
+      isArabic ? 'تشغيل التسجيلات في mpv' : 'Play recordings in mpv';
+  String get recordingsInMpvBody => isArabic
+      ? 'تُفتح التسجيلات في نافذة mpv عند توفره، فهي أنعم من المشغّل المدمج على لينكس.'
+      : 'Recordings open in the mpv window when it is installed; on Linux that is smoother than the built-in player.';
   String resumeFrom(String time) =>
       isArabic ? 'المتابعة من $time' : 'Continue from $time';
   String get resumeAction => isArabic ? 'متابعة' : 'Resume';

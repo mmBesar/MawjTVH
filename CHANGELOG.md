@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.18
+
+- Desktop: recordings now open in the mpv window by default when mpv is installed (new setting "Play recordings in mpv", on by default; off keeps them in the built-in player). On Linux the built-in player drops frames on recordings that mpv plays smoothly, and the cause is not found yet. Live TV is unchanged.
+- Resume works in the mpv window too: a dialog asks before it opens, mpv starts at the saved point, and the position is saved every 5 seconds and when the window closes.
+
 ## 0.1.17
 
 - Recordings in the built-in player: the seek bar was redrawn for every video frame (25 or more times a second, even while hidden), which live TV never does, and mpv read minutes of the file ahead at full speed. The bar now updates once a second and the read-ahead is limited to about 20 seconds and 32 MB. Aimed at the dropped frames seen on Linux with the recording that plays fine in the external mpv window.

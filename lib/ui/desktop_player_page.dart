@@ -32,10 +32,14 @@ class NowPlayingPage extends StatefulWidget {
     super.key,
     required this.channel,
     required this.capabilities,
+    this.startAt,
   });
 
   final Channel channel;
   final MpvCapabilities capabilities;
+
+  /// Where to start a recording that is being resumed.
+  final Duration? startAt;
 
   @override
   State<NowPlayingPage> createState() => _NowPlayingPageState();
@@ -51,6 +55,10 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   String? _decoder;
   int _generation = 0;
   MpvSession? _lastSession;
+  Duration? _startAt;
+  Timer? _positionTimer;
+  Duration _lastPosition = Duration.zero;
+  Duration _lastDuration = Duration.zero;
   DateTime _startedAt = DateTime.now();
   StreamRecorder? _recorder;
   bool get _localRecording => _recorder != null;
@@ -60,6 +68,11 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     super.initState();
     _channel = widget.channel;
     _appState = context.read<AppState>();
+    _startAt = widget.startAt;
+    _positionTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => unawaited(_pollPosition()),
+    );
     _lifecycle = AppLifecycleListener(
       onExitRequested: () async {
         _session?.kill();
@@ -97,11 +110,13 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
         allowInsecure: allowInsecure,
         useUserConfig: settings.useMpvConfig,
         fullscreen: settings.startFullscreen,
+        startAt: _startAt,
       );
       if (!mounted || generation != _generation) {
         session.kill();
         return;
       }
+      _startAt = null;
       _session = session;
       _lastSession = session;
       setState(() => _phase = _Phase.playing);
@@ -112,6 +127,32 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
       if (mounted && generation == _generation) {
         setState(() => _phase = _Phase.failed);
       }
+    }
+  }
+
+  /// Asks mpv where it is, so a recording can be resumed later.
+  Future<void> _pollPosition() async {
+    final session = _session;
+    if (session == null || !isSyntheticChannel(_channel)) {
+      return;
+    }
+    final position = await session.property('time-pos');
+    final duration = await session.property('duration');
+    if (position is num && duration is num) {
+      _lastPosition = Duration(milliseconds: (position * 1000).round());
+      _lastDuration = Duration(milliseconds: (duration * 1000).round());
+      _rememberPosition();
+    }
+  }
+
+  void _rememberPosition() {
+    if (!isSyntheticChannel(_channel)) {
+      return;
+    }
+    try {
+      _appState.savePosition(_channel, _lastPosition, _lastDuration);
+    } catch (error) {
+      debugPrint('Could not remember the position: $error');
     }
   }
 
@@ -294,6 +335,8 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   @override
   void dispose() {
     _generation++;
+    _positionTimer?.cancel();
+    _rememberPosition();
     _decoderTimer?.cancel();
     _lifecycle?.dispose();
     try {

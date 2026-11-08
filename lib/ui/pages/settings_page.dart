@@ -1010,6 +1010,25 @@ class _PlayerSettings extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (!settings.useMpvWindow)
+                  SwitchListTile(
+                    value: enabled && settings.recordingsInMpv,
+                    onChanged: enabled
+                        ? (value) => unawaited(
+                              state.updateSettings(
+                                settings.copyWith(recordingsInMpv: value),
+                              ),
+                            )
+                        : null,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(strings.recordingsInMpv),
+                    subtitle: Text(
+                      strings.recordingsInMpvBody,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.subtext0,
+                      ),
+                    ),
+                  ),
                 if (!settings.useMpvWindow) ...<Widget>[
                   const SizedBox(height: 8),
                   _FieldLabel(text: strings.inAppRenderer),

@@ -44,12 +44,23 @@ Future<void> openPlayer(BuildContext context, Channel channel) async {
   final state = context.read<AppState>();
   final navigator = Navigator.of(context);
   Widget page = PlayerPage(channel: channel);
-  if (kIsDesktop && state.settings.useMpvWindow) {
+  final inMpv = kIsDesktop &&
+      (state.settings.useMpvWindow ||
+          (state.settings.recordingsInMpv && isSyntheticChannel(channel)));
+  if (inMpv) {
     MpvRuntime.useCustomPath(state.settings.mpvPath);
     final capabilities = await MpvRuntime.capabilities();
     if (capabilities != null) {
-      page = NowPlayingPage(channel: channel, capabilities: capabilities);
-    } else if (context.mounted) {
+      Duration? startAt;
+      if (context.mounted) {
+        startAt = await _askResumeDialog(context, channel);
+      }
+      page = NowPlayingPage(
+        channel: channel,
+        capabilities: capabilities,
+        startAt: startAt,
+      );
+    } else if (state.settings.useMpvWindow && context.mounted) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
           content: Text(context.strings.mpvMissing),
@@ -71,6 +82,36 @@ Future<void> openPlayer(BuildContext context, Channel channel) async {
       reverseTransitionDuration: const Duration(milliseconds: 160),
     ),
   );
+}
+
+/// Asks whether to continue a recording that was left part-way; used before
+/// the mpv window opens. Null means start from the beginning.
+Future<Duration?> _askResumeDialog(BuildContext context, Channel channel) async {
+  final at = context.read<AppState>().resumeFor(channel);
+  if (at == null) {
+    return null;
+  }
+  final strings = context.strings;
+  final resume = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) => AlertDialog(
+      icon: const Icon(Icons.history_rounded),
+      title: Text(strings.resumeFrom(_formatClock(at))),
+      content: Text(channel.name),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: Text(strings.startOver),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: Text(strings.resumeAction),
+        ),
+      ],
+    ),
+  );
+  return resume == true ? at : null;
 }
 
 class PlayerPage extends StatefulWidget {
