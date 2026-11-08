@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.19
+
+- Likely cause of the dropped frames in the built-in player on recordings: media_kit turns on mpv's on-disk cache, which ignores the memory limits, so mpv read the whole recording as fast as the server could send it (14 MB/s for minutes). That traffic goes through the app's own stream proxy on the thread Flutter needs to present each video frame. Recordings now use an in-memory cache limited to 30 seconds and 48 MB, so the file is read at about the speed it plays. The problem report shows `cache-on-disk` and `cache-secs`, and `demuxer-cache-duration` should now stay near 30.
+- "Play recordings in mpv" (0.1.18) is now off by default, so the built-in player is what gets tested; turn it on to open recordings in the mpv window.
+
 ## 0.1.18
 
 - Desktop: recordings now open in the mpv window by default when mpv is installed (new setting "Play recordings in mpv", on by default; off keeps them in the built-in player). On Linux the built-in player drops frames on recordings that mpv plays smoothly, and the cause is not found yet. Live TV is unchanged.

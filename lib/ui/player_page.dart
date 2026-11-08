@@ -490,11 +490,16 @@ class _PlayerPageState extends State<PlayerPage> {
       await _setMpvProperty('tls-verify', allowInsecure ? 'no' : 'yes');
       await _setMpvProperty('demuxer-lavf-o', _demuxerLavfOptions);
       if (_isVod) {
-        // A recording is read from a file, so mpv would otherwise pull minutes
-        // of it at full speed; keep the reading modest and steady.
-        await _setMpvProperty('demuxer-max-bytes', '33554432');
-        await _setMpvProperty('demuxer-readahead-secs', '20');
-        await _setMpvProperty('demuxer-max-back-bytes', '16777216');
+        // media_kit turns on a cache on disk, which has no size limit, so mpv
+        // read the whole recording as fast as the server could send it (about
+        // 14 MB/s). That traffic runs through this app's own stream proxy, on
+        // the thread Flutter needs to show every video frame, and made the
+        // picture drop frames. Keep the cache in memory and a short way
+        // ahead, so the file is read at about the speed it is played.
+        await _setMpvProperty('cache-on-disk', 'no');
+        await _setMpvProperty('cache-secs', '30');
+        await _setMpvProperty('demuxer-max-bytes', '50331648');
+        await _setMpvProperty('demuxer-max-back-bytes', '8388608');
       }
       if (!mounted) {
         return;
@@ -1528,6 +1533,8 @@ class _PlayerPageState extends State<PlayerPage> {
         'vo-delayed-frame-count',
         'avsync',
         'demuxer-cache-duration',
+        'cache-on-disk',
+        'cache-secs',
         'seeking',
         'eof-reached',
         'time-pos',
