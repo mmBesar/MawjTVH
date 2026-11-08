@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.22
+
+- Resume starts the recording at the saved point as it opens (mpv's own start position), instead of opening it paused and jumping afterwards. Measured on Linux: a recording played from the start dropped a few frames, but one resumed with the old method dropped 20 to 60 frames per 5 seconds for 25 to 60 seconds. The decoder may also skip the frames before a jump target again (`hr-seek-framedrop`), which makes seeking in recordings quicker.
+
 ## 0.1.21
 
 - The problem report (copy diagnostics) now shows how Flutter's own frames behaved while the page was open (how many, how many were slow to build or draw, the worst times) and how many video frames mpv dropped in each 5-second slice. This tells whether the drops come from Flutter's drawing or from mpv's rendering, and whether they come in bursts. No playback change.

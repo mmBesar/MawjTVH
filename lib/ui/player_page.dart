@@ -582,6 +582,9 @@ class _PlayerPageState extends State<PlayerPage> {
         // picture drop frames. Keep the cache in memory and a short way
         // ahead, so the file is read at about the speed it is played.
         await _setMpvProperty('cache-on-disk', 'no');
+        // media_kit turns this off; mpv's default lets the decoder skip the
+        // frames before a seek target, which is what makes a jump quick.
+        await _setMpvProperty('hr-seek-framedrop', 'yes');
         await _setMpvProperty('cache-secs', '30');
         await _setMpvProperty('demuxer-max-bytes', '50331648');
         await _setMpvProperty('demuxer-max-back-bytes', '8388608');
@@ -599,32 +602,16 @@ class _PlayerPageState extends State<PlayerPage> {
         Media(
           _channel.url,
           httpHeaders: const <String, String>{'User-Agent': kMawjUserAgent},
+          // Resuming starts the file at that point, as mpv's own --start
+          // does. Seeking after opening it paused was followed by 25 to 60
+          // seconds of heavy frame dropping.
+          start: resumeAt,
         ),
-        play: resumeAt == null,
       );
       if (!mounted) {
         // The page was closed while the stream was still opening.
         unawaited(_player.stop());
         return;
-      }
-      if (resumeAt != null) {
-        // Seeking works only once the file is known, so wait for its length,
-        // jump, and only then start playing.
-        if (_player.state.duration <= Duration.zero) {
-          try {
-            await _player.stream.duration
-                .firstWhere((length) => length > Duration.zero)
-                .timeout(const Duration(seconds: 20));
-          } catch (_) {
-            // Go on anyway: the seek may still work.
-          }
-        }
-        if (!mounted) {
-          unawaited(_player.stop());
-          return;
-        }
-        await _player.seek(resumeAt);
-        await _player.play();
       }
       if (mounted) {
         setState(() => _buffering = false);
