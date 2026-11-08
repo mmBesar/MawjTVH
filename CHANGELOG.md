@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.20
+
+- The resume prompt has a Cancel button, and Escape cancels it: nothing plays and you go back. This applies to the built-in player's prompt and to the dialog shown before the mpv window opens (where Escape or a click outside also cancels).
+
 ## 0.1.19
 
 - Likely cause of the dropped frames in the built-in player on recordings: media_kit turns on mpv's on-disk cache, which ignores the memory limits, so mpv read the whole recording as fast as the server could send it (14 MB/s for minutes). That traffic goes through the app's own stream proxy on the thread Flutter needs to present each video frame. Recordings now use an in-memory cache limited to 30 seconds and 48 MB, so the file is read at about the speed it plays. The problem report shows `cache-on-disk` and `cache-secs`, and `demuxer-cache-duration` should now stay near 30.

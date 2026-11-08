@@ -53,7 +53,11 @@ Future<void> openPlayer(BuildContext context, Channel channel) async {
     if (capabilities != null) {
       Duration? startAt;
       if (context.mounted) {
-        startAt = await _askResumeDialog(context, channel);
+        final answer = await _askResumeDialog(context, channel);
+        if (answer.cancel) {
+          return;
+        }
+        startAt = answer.at;
       }
       page = NowPlayingPage(
         channel: channel,
@@ -85,33 +89,46 @@ Future<void> openPlayer(BuildContext context, Channel channel) async {
 }
 
 /// Asks whether to continue a recording that was left part-way; used before
-/// the mpv window opens. Null means start from the beginning.
-Future<Duration?> _askResumeDialog(BuildContext context, Channel channel) async {
+/// the mpv window opens. `cancel` means the person does not want to watch
+/// after all; otherwise `at` is where to start (null: from the beginning).
+Future<({bool cancel, Duration? at})> _askResumeDialog(
+  BuildContext context,
+  Channel channel,
+) async {
   final at = context.read<AppState>().resumeFor(channel);
   if (at == null) {
-    return null;
+    return (cancel: false, at: null);
   }
   final strings = context.strings;
-  final resume = await showDialog<bool>(
+  // 0 cancel, 1 start over, 2 resume. Escape or a tap outside counts as
+  // cancel, since the dialog returns null then.
+  final choice = await showDialog<int>(
     context: context,
-    barrierDismissible: false,
     builder: (dialogContext) => AlertDialog(
       icon: const Icon(Icons.history_rounded),
       title: Text(strings.resumeFrom(_formatClock(at))),
       content: Text(channel.name),
       actions: <Widget>[
         TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
+          onPressed: () => Navigator.of(dialogContext).pop(0),
+          child: Text(strings.cancel),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(1),
           child: Text(strings.startOver),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(dialogContext).pop(true),
+          autofocus: true,
+          onPressed: () => Navigator.of(dialogContext).pop(2),
           child: Text(strings.resumeAction),
         ),
       ],
     ),
   );
-  return resume == true ? at : null;
+  if (choice == null || choice == 0) {
+    return (cancel: true, at: null);
+  }
+  return (cancel: false, at: choice == 2 ? at : null);
 }
 
 class PlayerPage extends StatefulWidget {
@@ -245,6 +262,7 @@ class _PlayerPageState extends State<PlayerPage> {
   // Resume: where a recording stopped last time, offered for a few seconds.
   Duration? _resumeOffer;
   Completer<Duration?>? _resumeChoice;
+  bool _resumeCancelled = false;
   bool _offered = false;
   Timer? _positionTimer;
   Map<String, String> _infoProps = const <String, String>{};
@@ -394,6 +412,22 @@ class _PlayerPageState extends State<PlayerPage> {
     return completer.future;
   }
 
+  /// The person changed their mind: leave without playing anything.
+  void _cancelResume() {
+    final completer = _resumeChoice;
+    _resumeChoice = null;
+    _resumeCancelled = true;
+    if (mounted) {
+      setState(() => _resumeOffer = null);
+    }
+    if (completer != null && !completer.isCompleted) {
+      completer.complete(null);
+    }
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
   void _chooseResume(bool resume) {
     final at = _resumeOffer;
     final completer = _resumeChoice;
@@ -442,7 +476,7 @@ class _PlayerPageState extends State<PlayerPage> {
       final at = context.read<AppState>().resumeFor(_channel);
       if (at != null) {
         resumeAt = await _askResume(at);
-        if (!mounted) {
+        if (!mounted || _resumeCancelled) {
           return;
         }
       }
@@ -1737,7 +1771,9 @@ class _PlayerPageState extends State<PlayerPage> {
       child: CallbackShortcuts(
         bindings: <ShortcutActivator, VoidCallback>{
           const SingleActivator(LogicalKeyboardKey.escape): () {
-            if (_helpOpen) {
+            if (_resumeOffer != null) {
+              _cancelResume();
+            } else if (_helpOpen) {
               _toggleHelp();
             } else if (_fullscreen) {
               unawaited(_toggleFullscreen());
@@ -2220,6 +2256,14 @@ class _PlayerPageState extends State<PlayerPage> {
                           side: const BorderSide(color: Colors.white54),
                         ),
                         child: Text(strings.startOver),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    TextButton(
+                      onPressed: _cancelResume,
+                      child: Text(
+                        strings.cancel,
+                        style: const TextStyle(color: Colors.white70),
                       ),
                     ),
                   ],
