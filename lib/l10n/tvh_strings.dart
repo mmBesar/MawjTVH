@@ -214,6 +214,22 @@ extension TvhStrings on AppStrings {
       isArabic ? 'المتابعة من $time' : 'Continue from $time';
   String get resumeAction => isArabic ? 'متابعة' : 'Resume';
   String get startOver => isArabic ? 'من البداية' : 'Start over';
+  /// Short label of a guide day chip: "Wed 11".
+  String guideDayChip(DateTime day) {
+    const en = <String>['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const ar = <String>[
+      'الاثنين',
+      'الثلاثاء',
+      'الأربعاء',
+      'الخميس',
+      'الجمعة',
+      'السبت',
+      'الأحد',
+    ];
+    final name = (isArabic ? ar : en)[(day.weekday - 1) % 7];
+    return '$name ${day.day}';
+  }
+
   String get seekBack10 => isArabic ? 'رجوع ١٠ ثوانٍ' : 'Back 10 s';
   String get seekForward10 => isArabic ? 'تقدّم ١٠ ثوانٍ' : 'Forward 10 s';
   String get resetPictureLabel =>

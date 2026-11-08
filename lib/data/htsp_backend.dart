@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show debugPrint;
+
 import 'htsp_connection.dart';
 import 'htsp_stream_proxy.dart';
 import 'models.dart';
@@ -35,6 +37,16 @@ class HtspBackend {
       <String, ({TvhSignal signal, DateTime at})>{};
   int _guideHours = 12;
   bool _closed = false;
+
+  /// How far ahead the server pushes guide events on its own.
+  DateTime _pushedUntil = DateTime.now();
+
+  // Guide days beyond the pushed range are fetched one channel at a time,
+  // only for the channels the guide is showing. These track what was fetched.
+  final Map<int, DateTime> _extraUntil = <int, DateTime>{};
+  final Map<int, DateTime> _extraAt = <int, DateTime>{};
+  final Map<int, Set<int>> _extraIds = <int, Set<int>>{};
+  final Map<int, Future<void>> _extraBusy = <int, Future<void>>{};
 
   /// Fires (debounced) whenever channels, guide or recordings changed.
   Stream<void> get changes => _changes.stream;
@@ -88,7 +100,10 @@ class HtspBackend {
     }
     backend._horizon = Timer.periodic(
       const Duration(minutes: 30),
-      (_) => unawaited(backend._enable().catchError((Object _) {})),
+      (_) {
+        backend._pruneEvents();
+        unawaited(backend._enable().catchError((Object _) {}));
+      },
     );
     return backend;
   }
@@ -98,6 +113,98 @@ class HtspBackend {
     await _connection.request('enableAsyncMetadata', <String, Object?>{
       'epg': 1,
       'epgMaxTime': until.millisecondsSinceEpoch ~/ 1000,
+    });
+    _pushedUntil = until;
+  }
+
+  /// Makes sure the guide holds [channelId]'s programmes up to [until].
+  ///
+  /// The server pushes only a few hours ahead; for a later day the guide asks
+  /// for that one channel with `getEvents {channelId, maxTime}`. Calling this
+  /// again is cheap: nothing is sent while the channel is already covered
+  /// (and was fetched in the last 20 minutes) or while a fetch is running.
+  Future<void> ensureEvents(String channelId, DateTime until) {
+    final id = int.tryParse(channelId);
+    if (id == null || _closed || !_channels.containsKey(id)) {
+      return Future<void>.value();
+    }
+    if (!until.isAfter(_pushedUntil)) {
+      return Future<void>.value();
+    }
+    final have = _extraUntil[id];
+    final at = _extraAt[id];
+    if (have != null &&
+        at != null &&
+        !have.isBefore(until) &&
+        DateTime.now().difference(at) < const Duration(minutes: 20)) {
+      return Future<void>.value();
+    }
+    final running = _extraBusy[id];
+    if (running != null) {
+      return running.then((_) => ensureEvents(channelId, until));
+    }
+    final job = _fetchEvents(id, until).whenComplete(() {
+      _extraBusy.remove(id);
+    });
+    _extraBusy[id] = job;
+    return job;
+  }
+
+  Future<void> _fetchEvents(int id, DateTime until) async {
+    try {
+      final reply = await _connection.request('getEvents', <String, Object?>{
+        'channelId': id,
+        'maxTime': until.millisecondsSinceEpoch ~/ 1000,
+      });
+      final rows = reply['events'];
+      final returned = <int, Map<String, Object?>>{};
+      if (rows is List) {
+        for (final row in rows) {
+          if (row is Map) {
+            final copy = Map<String, Object?>.from(row);
+            final eventId = _int(copy['eventId']);
+            if (eventId != null) {
+              returned[eventId] = copy;
+            }
+          }
+        }
+      }
+      final old = _extraIds[id] ?? const <int>{};
+      // Events fetched earlier that the server no longer lists are gone.
+      for (final eventId in old) {
+        if (!returned.containsKey(eventId)) {
+          _events.remove(eventId);
+        }
+      }
+      final fresh = <int>{};
+      for (final entry in returned.entries) {
+        // Events inside the pushed range are kept up to date by the server;
+        // only the ones beyond it belong to this fetch.
+        if (!_events.containsKey(entry.key) || old.contains(entry.key)) {
+          _events[entry.key] = entry.value;
+          fresh.add(entry.key);
+        }
+      }
+      _extraIds[id] = fresh;
+      _extraUntil[id] = until;
+      _extraAt[id] = DateTime.now();
+      _notify();
+    } catch (error) {
+      debugPrint('Guide fetch for channel $id failed: $error');
+      // Try again in about a minute rather than on every redraw.
+      _extraUntil[id] = until;
+      _extraAt[id] = DateTime.now().subtract(const Duration(minutes: 19));
+    }
+  }
+
+  /// Drops programmes that ended long ago, so fetched days do not pile up.
+  void _pruneEvents() {
+    final cutoff =
+        DateTime.now().subtract(const Duration(hours: 3)).millisecondsSinceEpoch ~/
+            1000;
+    _events.removeWhere((_, event) {
+      final stop = _int(event['stop']);
+      return stop != null && stop < cutoff;
     });
   }
 

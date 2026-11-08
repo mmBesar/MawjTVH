@@ -341,6 +341,23 @@ class AppState extends ChangeNotifier {
   /// True while the native HTSP session is connected.
   bool get usesHtsp => _htspSession != null && !_htspSession!.isClosed;
 
+  /// How many days (today included) the guide can show. Over HTSP any day the
+  /// server has guide data for can be fetched on demand; with the web API the
+  /// guide holds only what was loaded, which the guide-hours setting decides.
+  int get guideDays =>
+      usesHtsp ? 7 : ((_settings.guideHours + 2) / 24).ceil().clamp(1, 7);
+
+  /// Asks the server for [channel]'s programmes up to [until] when the guide
+  /// is showing a day beyond what is already loaded. Safe to call on every
+  /// redraw; it sends nothing while the channel is covered.
+  void ensureGuideEvents(Channel channel, DateTime until) {
+    final htsp = _htspSession;
+    if (htsp == null || htsp.isClosed) {
+      return;
+    }
+    unawaited(htsp.ensureEvents(channel.id, until));
+  }
+
   void _attachHtsp(HtspBackend? backend) {
     _htspSession = backend;
     if (backend == null) {

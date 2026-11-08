@@ -64,6 +64,10 @@ class _GuidePageState extends State<GuidePage> {
   bool _scrolledToNow = false;
   late DateTime _windowStart;
 
+  /// 0 is the running timeline; 1 is tomorrow, and so on. Any other day shows
+  /// that calendar day from midnight to midnight.
+  int _dayOffset = 0;
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +82,21 @@ class _GuidePageState extends State<GuidePage> {
     _leftVertical.dispose();
     _rightVertical.dispose();
     super.dispose();
+  }
+
+  static DateTime _dayStart(DateTime now, int offset) =>
+      DateTime(now.year, now.month, now.day + offset);
+
+  void _selectDay(int offset, DateTime now) {
+    if (offset == _dayOffset) {
+      return;
+    }
+    setState(() {
+      _dayOffset = offset;
+      _windowStart =
+          offset == 0 ? _windowStartFor(now) : _dayStart(now, offset);
+      _scrolledToNow = false;
+    });
   }
 
   /// One hour before the last half hour, so "now" has some history on its left.
@@ -176,12 +195,18 @@ class _GuidePageState extends State<GuidePage> {
       );
     }
 
-    _hours = state.settings.guideHours;
+    if (_dayOffset >= state.guideDays) {
+      _dayOffset = 0;
+      _windowStart = _windowStartFor(state.now);
+      _scrolledToNow = false;
+    }
+    _hours = _dayOffset == 0 ? state.settings.guideHours : 24;
 
     // Roll the window forward when the app has been open for most of it.
-    if (state.now.isAfter(
-      _windowStart.add(Duration(minutes: _spanMinutes - 90)),
-    )) {
+    if (_dayOffset == 0 &&
+        state.now.isAfter(
+          _windowStart.add(Duration(minutes: _spanMinutes - 90)),
+        )) {
       _windowStart = _windowStartFor(state.now);
       _scrolledToNow = false;
     }
@@ -201,7 +226,11 @@ class _GuidePageState extends State<GuidePage> {
           return;
         }
         _scrolledToNow = true;
-        _scrollToNow(state.now);
+        if (_dayOffset == 0) {
+          _scrollToNow(state.now);
+        } else {
+          _horizontal.jumpTo(0);
+        }
       });
     }
 
@@ -239,7 +268,13 @@ class _GuidePageState extends State<GuidePage> {
                 ),
                 const SizedBox(width: 4),
                 FilledButton.tonalIcon(
-                  onPressed: () => _scrollToNow(state.now, animate: true),
+                  onPressed: () {
+                    if (_dayOffset != 0) {
+                      _selectDay(0, state.now);
+                    } else {
+                      _scrollToNow(state.now, animate: true);
+                    }
+                  },
                   icon: const Icon(Icons.my_location_rounded, size: 18),
                   label: Text(strings.guideNow),
                 ),
@@ -278,6 +313,34 @@ class _GuidePageState extends State<GuidePage> {
               ],
             ),
           ),
+          if (state.guideDays > 1)
+            SizedBox(
+              height: 44,
+              child: WheelScroll(builder: (context, controller) => ListView(
+                controller: controller,
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: <Widget>[
+                  for (var day = 0; day < state.guideDays; day++)
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(end: 8),
+                      child: ChoiceChip(
+                        label: Text(
+                          day == 0
+                              ? strings.today
+                              : day == 1
+                                  ? strings.tomorrow
+                                  : strings.guideDayChip(
+                                      _dayStart(state.now, day),
+                                    ),
+                        ),
+                        selected: _dayOffset == day,
+                        onSelected: (_) => _selectDay(day, state.now),
+                      ),
+                    ),
+                ],
+              )),
+            ),
           const MediaFilterChips(
             padding: EdgeInsets.symmetric(horizontal: 16),
           ),
@@ -442,6 +505,9 @@ class _GuidePageState extends State<GuidePage> {
   ) {
     final colors = context.mawjColors;
     final strings = context.strings;
+    // Only the rows that get built, that is the ones on screen, ask the
+    // server for a day it has not pushed yet.
+    state.ensureGuideEvents(channel, windowEnd);
     final programmes = state.epg.forWindow(channel, _windowStart, windowEnd);
     final blocks = <Widget>[];
     for (final programme in programmes) {

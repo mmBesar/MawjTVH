@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.23
+
+- The guide has day chips (Today, Tomorrow, then Wed 11 and so on, up to a week). Today keeps the running timeline; any other day shows midnight to midnight.
+- Days are loaded lazily. Over HTSP the server pushes only the next few hours; for a later day the guide asks for each channel it actually builds on screen (`getEvents` with the channel and an end time) and keeps it for 20 minutes, so scrolling a long list fetches only what you look at and the whole week of the whole server is never held. Old programmes are dropped as they pass.
+- Without HTSP (web API only) the guide still shows only what was loaded; the chips then cover the days that the guide-hours setting reaches, and are hidden when that is one day.
+- Not tested against a real server yet: whether a given server returns a full day for every channel.
+
 ## 0.1.22
 
 - Resume starts the recording at the saved point as it opens (mpv's own start position), instead of opening it paused and jumping afterwards. Measured on Linux: a recording played from the start dropped a few frames, but one resumed with the old method dropped 20 to 60 frames per 5 seconds for 25 to 60 seconds. The decoder may also skip the frames before a jump target again (`hr-seek-framedrop`), which makes seeking in recordings quicker.
