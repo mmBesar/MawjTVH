@@ -88,7 +88,18 @@ jobs:
           } > android/key.properties
 
       - name: Build release APK
-        run: flutter build apk --release --target-platform android-arm64
+        # media_kit downloads its libmpv jars from GitHub releases while
+        # Gradle configures the project, and GitHub sometimes answers 502/504.
+        # Jars that already arrived are kept, so a retry only fetches the rest.
+        run: |
+          for attempt in 1 2 3; do
+            if flutter build apk --release --target-platform android-arm64; then
+              exit 0
+            fi
+            echo "::warning::Build attempt $attempt failed."
+            sleep $((attempt * 20))
+          done
+          exit 1
 
       - name: Verify APK signature
         env:
