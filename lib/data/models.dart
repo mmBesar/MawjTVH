@@ -335,7 +335,6 @@ class AppSettings {
     this.mpvPath = '',
     this.autoRefreshMinutes = 360,
     this.guideHours = 12,
-    this.guideDaysBack = 3,
     this.recordDir = '',
     this.richVisuals = true,
     this.reduceMotion = false,
@@ -393,9 +392,6 @@ class AppSettings {
 
   /// How many hours the guide timeline spans (12 to 72).
   final int guideHours;
-
-  /// How many past days of the guide the app keeps on the device.
-  final int guideDaysBack;
 
   /// Where "record to this device" saves; empty means the default folder.
   final String recordDir;
@@ -456,7 +452,6 @@ class AppSettings {
     String? mpvPath,
     int? autoRefreshMinutes,
     int? guideHours,
-    int? guideDaysBack,
     String? recordDir,
     bool? richVisuals,
     bool? reduceMotion,
@@ -489,7 +484,6 @@ class AppSettings {
       mpvPath: mpvPath ?? this.mpvPath,
       autoRefreshMinutes: autoRefreshMinutes ?? this.autoRefreshMinutes,
       guideHours: guideHours ?? this.guideHours,
-      guideDaysBack: guideDaysBack ?? this.guideDaysBack,
       recordDir: recordDir ?? this.recordDir,
       richVisuals: richVisuals ?? this.richVisuals,
       reduceMotion: reduceMotion ?? this.reduceMotion,
@@ -523,7 +517,6 @@ class AppSettings {
         'mpvPath': mpvPath,
         'autoRefreshMinutes': autoRefreshMinutes,
         'guideHours': guideHours,
-        'guideDaysBack': guideDaysBack,
         'recordDir': recordDir,
         'richVisuals': richVisuals,
         'reduceMotion': reduceMotion,
@@ -568,7 +561,6 @@ class AppSettings {
       mpvPath: json['mpvPath'] as String? ?? '',
       autoRefreshMinutes: json['autoRefreshMinutes'] as int? ?? 360,
       guideHours: json['guideHours'] as int? ?? 12,
-      guideDaysBack: json['guideDaysBack'] as int? ?? 3,
       recordDir: json['recordDir'] as String? ?? '',
       richVisuals: json['richVisuals'] as bool? ?? true,
       reduceMotion: json['reduceMotion'] as bool? ?? false,

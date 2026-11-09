@@ -65,12 +65,10 @@ class _GuidePageState extends State<GuidePage> {
   bool _scrolledToNow = false;
   late DateTime _windowStart;
 
-  /// 0 is the running timeline; 1 is tomorrow, -1 is yesterday, and so on.
+  /// 0 is the running timeline; 1 is tomorrow, and so on.
   /// Any other day shows that calendar day from midnight to midnight.
   int _dayOffset = 0;
   final GlobalKey _selectedDayKey = GlobalKey();
-  bool _chipsPlaced = false;
-  bool _historyRequested = false;
 
   @override
   void initState() {
@@ -101,19 +99,6 @@ class _GuidePageState extends State<GuidePage> {
           offset == 0 ? _windowStartFor(now) : _dayStart(now, offset);
       _scrolledToNow = false;
     });
-    if (offset < 0) {
-      // Past days come from what the device remembers; read that day first.
-      unawaited(
-        context.read<AppState>().prepareGuideHistory(
-              _windowStart,
-              DateTime(
-                _windowStart.year,
-                _windowStart.month,
-                _windowStart.day + 1,
-              ),
-            ),
-      );
-    }
     _showSelectedDayChip();
   }
 
@@ -229,20 +214,7 @@ class _GuidePageState extends State<GuidePage> {
       );
     }
 
-    if (!_historyRequested && state.guidePastDays > 0) {
-      // The running timeline reaches back into programmes that already ended.
-      _historyRequested = true;
-      final from = _windowStart;
-      final to = DateTime(from.year, from.month, from.day + 1);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          unawaited(
-            context.read<AppState>().prepareGuideHistory(from, to),
-          );
-        }
-      });
-    }
-    if (_dayOffset >= state.guideDays || _dayOffset < -state.guidePastDays) {
+    if (_dayOffset >= state.guideDays) {
       _dayOffset = 0;
       _windowStart = _windowStartFor(state.now);
       _scrolledToNow = false;
@@ -360,23 +332,17 @@ class _GuidePageState extends State<GuidePage> {
               ],
             ),
           ),
-          if (state.guideDays > 1 || state.guidePastDays > 0)
+          if (state.guideDays > 1)
             SizedBox(
               height: 44,
               child: WheelScroll(builder: (context, controller) {
-                if (!_chipsPlaced) {
-                  _chipsPlaced = true;
-                  _showSelectedDayChip();
-                }
                 return SingleChildScrollView(
                   controller: controller,
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: <Widget>[
-                      for (var day = -state.guidePastDays;
-                          day < state.guideDays;
-                          day++)
+                      for (var day = 0; day < state.guideDays; day++)
                         Padding(
                           key: day == _dayOffset ? _selectedDayKey : null,
                           padding: const EdgeInsetsDirectional.only(end: 8),
@@ -386,11 +352,9 @@ class _GuidePageState extends State<GuidePage> {
                                   ? strings.today
                                   : day == 1
                                       ? strings.tomorrow
-                                      : day == -1
-                                          ? strings.yesterday
-                                          : strings.guideDayChip(
-                                              _dayStart(state.now, day),
-                                            ),
+                                      : strings.guideDayChip(
+                                          _dayStart(state.now, day),
+                                        ),
                             ),
                             selected: _dayOffset == day,
                             onSelected: (_) => _selectDay(day, state.now),
@@ -400,16 +364,6 @@ class _GuidePageState extends State<GuidePage> {
                   ),
                 );
               }),
-            ),
-          if (_dayOffset < 0)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
-              child: Text(
-                strings.guidePastNote,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colors.subtext0,
-                ),
-              ),
             ),
           const MediaFilterChips(
             padding: EdgeInsets.symmetric(horizontal: 16),
@@ -579,7 +533,7 @@ class _GuidePageState extends State<GuidePage> {
     // server for a day it has not pushed yet.
     state.ensureGuideEvents(channel, windowEnd);
     final programmes =
-        state.programmesInWindow(channel, _windowStart, windowEnd);
+        state.epg.forWindow(channel, _windowStart, windowEnd);
     final blocks = <Widget>[];
     for (final programme in programmes) {
       final startMinutes =

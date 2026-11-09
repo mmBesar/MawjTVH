@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/catppuccin.dart';
 import '../core/text.dart';
-import 'guide_history.dart';
+import 'legacy_cleanup.dart';
 import 'htsp_backend.dart';
 import 'htsp_connection.dart';
 import 'models.dart';
@@ -183,6 +183,7 @@ class AppState extends ChangeNotifier {
 
     _loadUserLists();
     _restored = true;
+    unawaited(removeLeftoverGuideHistory());
     _ticker = Timer.periodic(const Duration(seconds: 30), (_) {
       _now = DateTime.now();
       notifyListeners();
@@ -191,7 +192,6 @@ class AppState extends ChangeNotifier {
       if (++_tick % 2 == 0 && _content != null) {
         unawaited(loadRecordings(quiet: true));
       }
-      _captureHistory();
     });
     notifyListeners();
 
@@ -362,95 +362,6 @@ class AppState extends ChangeNotifier {
         .toInt();
   }
 
-  /// How many past days the guide offers (what the device remembers).
-  int get guidePastDays => _settings.guideDaysBack;
-
-  final Map<String, GuideHistory> _histories = <String, GuideHistory>{};
-  final Set<String> _prunedHistories = <String>{};
-  DateTime _lastCapture = DateTime.fromMillisecondsSinceEpoch(0);
-  DateTime _lastHistoryFlush = DateTime.fromMillisecondsSinceEpoch(0);
-
-  GuideHistory? _historyOf(String? sourceId) {
-    if (sourceId == null) {
-      return null;
-    }
-    return _histories.putIfAbsent(sourceId, () => GuideHistory(sourceId));
-  }
-
-  /// Copies the programmes that have started into the on-device history, at
-  /// most once a minute; the files are written every few minutes.
-  void _captureHistory({bool force = false}) {
-    final content = _content;
-    final history = _historyOf(activeSource?.id);
-    if (content == null || history == null) {
-      return;
-    }
-    if (_settings.guideDaysBack <= 0) {
-      // Switched off: remove what was saved, once.
-      if (_prunedHistories.add('${history.sourceId}:off')) {
-        unawaited(history.clear());
-      }
-      return;
-    }
-    final now = DateTime.now();
-    if (!force && now.difference(_lastCapture) < const Duration(minutes: 1)) {
-      return;
-    }
-    _lastCapture = now;
-    _prunedHistories.remove('${history.sourceId}:off');
-    if (_prunedHistories
-        .add('${history.sourceId}:${_settings.guideDaysBack}')) {
-      unawaited(history.prune(_settings.guideDaysBack));
-    }
-    history.capture(content.epg.all, now);
-    if (force || now.difference(_lastHistoryFlush) > const Duration(minutes: 5)) {
-      _lastHistoryFlush = now;
-      unawaited(history.flush());
-    }
-  }
-
-  /// Loads the remembered programmes of a past window before it is drawn.
-  Future<void> prepareGuideHistory(DateTime from, DateTime to) async {
-    _captureHistory(force: true);
-    final history = _historyOf(activeSource?.id);
-    if (history == null) {
-      return;
-    }
-    await history.prepare(from, to);
-    if (!_disposed) {
-      notifyListeners();
-    }
-  }
-
-  /// [channel]'s programmes in the window: the live guide, plus what the
-  /// device remembers for the part that has already aired.
-  List<Programme> programmesInWindow(
-    Channel channel,
-    DateTime from,
-    DateTime to,
-  ) {
-    final live = epg.forWindow(channel, from, to);
-    if (from.isAfter(_now) || _settings.guideDaysBack <= 0) {
-      return live;
-    }
-    final history = _histories[activeSource?.id];
-    if (history == null) {
-      return live;
-    }
-    final past = history.forWindow(channel.id, from, to);
-    if (past.isEmpty) {
-      return live;
-    }
-    final starts = <int>{
-      for (final programme in live) programme.start.millisecondsSinceEpoch,
-    };
-    return <Programme>[
-      for (final programme in past)
-        if (!starts.contains(programme.start.millisecondsSinceEpoch)) programme,
-      ...live,
-    ]..sort((a, b) => a.start.compareTo(b.start));
-  }
-
   /// Asks the server for [channel]'s programmes up to [until] when the guide
   /// is showing a day beyond what is already loaded. Safe to call on every
   /// redraw; it sends nothing while the channel is covered.
@@ -527,7 +438,6 @@ class AppState extends ChangeNotifier {
     }
     _recordings = backend.recordings();
     _recordingsError = null;
-    _captureHistory();
     notifyListeners();
   }
 
@@ -726,10 +636,6 @@ class AppState extends ChangeNotifier {
     }
     await _storage.saveSources(_sources);
     await _storage.saveSettings(_settings);
-    final history = _histories.remove(sourceId);
-    if (history != null) {
-      unawaited(history.clear());
-    }
     notifyListeners();
     if (wasActive && remaining.isNotEmpty) {
       unawaited(load());
@@ -1148,9 +1054,6 @@ class AppState extends ChangeNotifier {
     _disposed = true;
     _loadGeneration++;
     _ticker?.cancel();
-    for (final history in _histories.values) {
-      unawaited(history.flush());
-    }
     _detachHtsp();
     super.dispose();
   }

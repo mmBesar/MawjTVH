@@ -512,41 +512,6 @@ class SettingsPage extends StatelessWidget {
                       },
                     ),
                     const SizedBox(height: 12),
-                    _FieldLabel(text: strings.guideDaysBackLabel),
-                    DropdownButton<int>(
-                      isExpanded: true,
-                      value: const <int>[0, 1, 2, 3, 5, 7, 14]
-                              .contains(settings.guideDaysBack)
-                          ? settings.guideDaysBack
-                          : 3,
-                      dropdownColor: colors.surface1,
-                      items: <DropdownMenuItem<int>>[
-                        for (final days in const <int>[0, 1, 2, 3, 5, 7, 14])
-                          DropdownMenuItem<int>(
-                            value: days,
-                            child: Text(strings.daysCount(days)),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          unawaited(
-                            state.updateSettings(
-                              settings.copyWith(guideDaysBack: value),
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        strings.guideDaysBackHelp,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: colors.subtext0,
-                            ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
                     _FieldLabel(text: strings.autoRefresh),
                     DropdownButton<int>(
                       isExpanded: true,
