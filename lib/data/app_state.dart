@@ -7,8 +7,8 @@ import 'package:flutter/foundation.dart';
 
 import '../core/catppuccin.dart';
 import '../core/text.dart';
-import 'htsp_backend.dart';
 import 'guide_history.dart';
+import 'htsp_backend.dart';
 import 'htsp_connection.dart';
 import 'models.dart';
 import 'storage.dart';
@@ -397,9 +397,9 @@ class AppState extends ChangeNotifier {
       return;
     }
     _lastCapture = now;
+    _prunedHistories.remove('${history.sourceId}:off');
     if (_prunedHistories
         .add('${history.sourceId}:${_settings.guideDaysBack}')) {
-      _prunedHistories.remove('${history.sourceId}:off');
       unawaited(history.prune(_settings.guideDaysBack));
     }
     history.capture(content.epg.all, now);
@@ -598,8 +598,15 @@ class AppState extends ChangeNotifier {
       return const <Channel>[];
     }
     final number = query.trim();
-    String folded(Channel channel) => _foldedChannel[channel] ??=
-        foldForSearch('${channel.name} ${channel.group ?? ''}');
+    String folded(Channel channel) {
+      var value = _foldedChannel[channel];
+      if (value == null) {
+        value = foldForSearch('${channel.name} ${channel.group ?? ''}');
+        _foldedChannel[channel] = value;
+      }
+      return value;
+    }
+
     final exact = channels.where((channel) {
       return channel.number == number || matchesAllTokens(folded(channel), tokens);
     }).toList(growable: false);
@@ -625,10 +632,14 @@ class AppState extends ChangeNotifier {
           !_channelById.containsKey(programme.channelId)) {
         continue;
       }
-      final folded = _foldedProgramme[programme] ??= foldForSearch(
-        '${programme.title} ${programme.subTitle ?? ''} '
-        '${programme.categories.join(' ')}',
-      );
+      var folded = _foldedProgramme[programme];
+      if (folded == null) {
+        folded = foldForSearch(
+          '${programme.title} ${programme.subTitle ?? ''} '
+          '${programme.categories.join(' ')}',
+        );
+        _foldedProgramme[programme] = folded;
+      }
       candidates.add((programme: programme, folded: folded));
     }
     var matched = candidates
@@ -715,6 +726,10 @@ class AppState extends ChangeNotifier {
     }
     await _storage.saveSources(_sources);
     await _storage.saveSettings(_settings);
+    final history = _histories.remove(sourceId);
+    if (history != null) {
+      unawaited(history.clear());
+    }
     notifyListeners();
     if (wasActive && remaining.isNotEmpty) {
       unawaited(load());
@@ -1133,6 +1148,9 @@ class AppState extends ChangeNotifier {
     _disposed = true;
     _loadGeneration++;
     _ticker?.cancel();
+    for (final history in _histories.values) {
+      unawaited(history.flush());
+    }
     _detachHtsp();
     super.dispose();
   }

@@ -22,6 +22,11 @@ void main() {
     expect(exact('Café Society', 'cafe'), isTrue);
   });
 
+  test('combining marks are ignored', () {
+    // "Cafe" followed by a combining acute accent.
+    expect(exact('Cafe\u0301 Society', 'cafe society'), isTrue);
+  });
+
   test('Arabic variants still merge', () {
     expect(exact('أخبار الصباح', 'اخبار'), isTrue);
   });

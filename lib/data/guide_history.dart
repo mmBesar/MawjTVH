@@ -78,6 +78,10 @@ class GuideHistory {
         programme.channelId,
         () => <Programme>[],
       );
+      // After the seen-set was emptied a programme can come round again.
+      if (list.any((known) => known.start == programme.start)) {
+        continue;
+      }
       list.add(_slim(programme));
       _dirty.add(day);
     }
@@ -113,8 +117,12 @@ class GuideHistory {
         await _load(day, dir);
         final byChannel = _days[day];
         if (byChannel == null) {
+          _dirty.remove(day);
           continue;
         }
+        // Cleared before writing: programmes captured while the file is being
+        // written mark the day dirty again and are saved next time.
+        _dirty.remove(day);
         final json = <String, Object?>{
           for (final entry in byChannel.entries)
             entry.key: <Object?>[
@@ -133,8 +141,8 @@ class GuideHistory {
         final temp = File('${dir.path}/$day.json.tmp');
         await temp.writeAsString(jsonEncode(json), flush: true);
         await temp.rename(file.path);
-        _dirty.remove(day);
       } catch (error) {
+        _dirty.add(day);
         debugPrint('Guide history could not save $day: $error');
       }
     }
@@ -224,8 +232,17 @@ class GuideHistory {
 
   /// Drops days from memory that are saved and no longer being looked at.
   void _forget() {
+    // Today and yesterday stay: the guide's running timeline reaches back
+    // into them, and they are where new programmes are being added.
+    final now = DateTime.now();
+    final keep = <String>{
+      dayKey(now),
+      dayKey(DateTime(now.year, now.month, now.day - 1)),
+    };
     for (final day in _days.keys.toList()) {
-      if (!_dirty.contains(day) && !_wanted.contains(day)) {
+      if (!_dirty.contains(day) &&
+          !_wanted.contains(day) &&
+          !keep.contains(day)) {
         _days.remove(day);
         _loaded.remove(day);
       }

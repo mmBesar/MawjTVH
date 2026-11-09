@@ -73,9 +73,11 @@ class _AppShellState extends State<AppShell> {
                 curve: Curves.easeOutCubic,
               )
               .whenComplete(() {
-            if (_navTarget == index) {
-              _navTarget = null;
+            // A later tap took over: that one finishes the job.
+            if (_navTarget != index) {
+              return;
             }
+            _navTarget = null;
             // Not while a finger has taken over the view.
             if (mounted &&
                 _pageController.hasClients &&

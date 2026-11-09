@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.25
+
+An audit of 0.1.23 and 0.1.24 (a separate reviewer read the code without my notes; I checked each finding).
+
+- Release: never publishes from a Build that is not green (the jobs of a Build are independent, so the files could exist although the tests failed); a tag with a suffix such as `v0.2.0-beta1` is checked against the right file names; the rebuilt run is picked by tag, so another manual Build can't be mistaken for it; the dispatch input is passed safely.
+- Packaging: a failed DEB, RPM or AppImage step is now really an error. Bash had switched `set -e` off inside the functions (they were called as `build_x || STATUS=1`), so a failed AppImage download left the step green and the file missing, which is probably how the ARM64 AppImage went missing.
+- Guide history: the running timeline now shows programmes that ended in the last hours (today and yesterday stay loaded and are read when the guide opens); a programme captured while a file was being written is no longer dropped; duplicates after the seen-list reset are avoided; unsaved history is written when the app closes; removing a source removes its history.
+- Guide: window lengths use calendar days (daylight-saving days were an hour off); the app asks again where the server's guide ends when the first try found nothing; later-day requests state an explicit count.
+- Android: tapping two tabs quickly (Favorites, then Settings) could leave the view on the first; a finished slide now yields to a later tap.
+- Search: accents typed as separate combining marks, and Arabic vowel signs, are ignored.
+- Known, left as is: the search text cache is rebuilt whenever the guide changes (typing in search re-folds the guide each time); a chip for "Tomorrow" chosen before midnight keeps showing that day after midnight until another chip is tapped.
+
 ## 0.1.24
 
 - Desktop: pages are drawn smaller (the automatic interface size is 100% instead of 120%, and the guide no longer stacks its own extra zoom on top). The sidebar keeps its size. Interface size now also offers 80% and 90%.

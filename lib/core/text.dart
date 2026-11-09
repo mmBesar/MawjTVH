@@ -59,6 +59,8 @@ String foldForSearch(String value) {
   }
   return buffer
       .toString()
+      // Combining marks (decomposed accents, Arabic vowel signs) vanish.
+      .replaceAll(RegExp(r'\p{M}+', unicode: true), '')
       .replaceAll(RegExp(r'[^\p{L}\p{N}]+', unicode: true), ' ')
       .trim();
 }

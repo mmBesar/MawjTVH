@@ -70,6 +70,7 @@ class _GuidePageState extends State<GuidePage> {
   int _dayOffset = 0;
   final GlobalKey _selectedDayKey = GlobalKey();
   bool _chipsPlaced = false;
+  bool _historyRequested = false;
 
   @override
   void initState() {
@@ -105,7 +106,11 @@ class _GuidePageState extends State<GuidePage> {
       unawaited(
         context.read<AppState>().prepareGuideHistory(
               _windowStart,
-              _windowStart.add(const Duration(days: 1)),
+              DateTime(
+                _windowStart.year,
+                _windowStart.month,
+                _windowStart.day + 1,
+              ),
             ),
       );
     }
@@ -224,6 +229,19 @@ class _GuidePageState extends State<GuidePage> {
       );
     }
 
+    if (!_historyRequested && state.guidePastDays > 0) {
+      // The running timeline reaches back into programmes that already ended.
+      _historyRequested = true;
+      final from = _windowStart;
+      final to = DateTime(from.year, from.month, from.day + 1);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          unawaited(
+            context.read<AppState>().prepareGuideHistory(from, to),
+          );
+        }
+      });
+    }
     if (_dayOffset >= state.guideDays || _dayOffset < -state.guidePastDays) {
       _dayOffset = 0;
       _windowStart = _windowStartFor(state.now);

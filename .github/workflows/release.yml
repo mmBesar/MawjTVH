@@ -49,20 +49,22 @@ jobs:
 
       - name: Find the build for this commit
         id: build
+        env:
+          INPUT_RUN_ID: ${{ github.event.inputs.run_id }}
         run: |
           set -euo pipefail
           sha="$(git rev-list -n1 "$TAG")"
-          run_id="${{ github.event.inputs.run_id }}"
+          run_id="$INPUT_RUN_ID"
           if [[ -z "$run_id" ]]; then
             run_id="$(gh run list --workflow build.yml --commit "$sha" \
               --status success --limit 1 --json databaseId \
               --jq '.[0].databaseId // empty')"
           fi
           if [[ -z "$run_id" ]]; then
-            echo "::error::No successful Build run for commit $sha. Push the commit to main and wait for a green build, then tag it."
-            exit 1
+            echo "::warning::No successful Build run for commit $sha; the next step builds it."
+          else
+            echo "Using Build run $run_id for $TAG ($sha)"
           fi
-          echo "Using Build run $run_id for $TAG ($sha)"
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
       - name: Download and check the build files
@@ -71,7 +73,10 @@ jobs:
           PRIVATE: ${{ github.event.repository.private }}
         run: |
           set -euo pipefail
+          # A tag may carry a suffix (v0.2.0-beta1); the files are named after
+          # the version in pubspec.yaml, without it.
           version="${TAG#v}"
+          version="${version%%-*}"
           arm=()
           if [[ "$PRIVATE" == "true" ]]; then
             arm=(--no-arm64)
@@ -87,20 +92,23 @@ jobs:
             ls -l release
           }
 
-          collect "$RUN_ID"
-          if tool/check_release_files.sh release "$version" "${arm[@]}"; then
-            exit 0
+          if [[ -n "$RUN_ID" ]]; then
+            collect "$RUN_ID"
+            if tool/check_release_files.sh release "$version" "${arm[@]}"; then
+              exit 0
+            fi
+            echo "::warning::Build run $RUN_ID is missing files; building $TAG again."
           fi
-
-          echo "::warning::Build run $RUN_ID is missing files; building $TAG again."
           before="$(gh run list --workflow build.yml --event workflow_dispatch \
-            --limit 1 --json databaseId --jq '.[0].databaseId // 0')"
+            --branch "$TAG" --limit 1 --json databaseId \
+            --jq '.[0].databaseId // 0')"
           gh workflow run build.yml --ref "$TAG"
           new=""
           for _ in $(seq 1 30); do
             sleep 10
-            latest="$(gh run list --workflow build.yml --event workflow_dispatch \
-              --limit 1 --json databaseId --jq '.[0].databaseId // 0')"
+            latest="$(gh run list --workflow build.yml \
+              --event workflow_dispatch --branch "$TAG" --limit 1 \
+              --json databaseId --jq '.[0].databaseId // 0')"
             if [[ "$latest" -gt "$before" ]]; then
               new="$latest"
               break
@@ -112,6 +120,15 @@ jobs:
           fi
           echo "Waiting for Build run $new"
           gh run watch "$new" --interval 30 --exit-status || true
+
+          # The jobs of a Build do not depend on each other, so the files can
+          # exist even when the tests or the analysis failed. Never release
+          # from a Build that is not green.
+          conclusion="$(gh run view "$new" --json conclusion --jq .conclusion)"
+          if [[ "$conclusion" != "success" ]]; then
+            echo "::error::Build run $new ended as '$conclusion'. Nothing was released."
+            exit 1
+          fi
 
           collect "$new"
           if ! tool/check_release_files.sh release "$version" "${arm[@]}"; then

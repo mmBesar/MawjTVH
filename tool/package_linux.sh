@@ -406,9 +406,25 @@ EOF
 }
 
 STATUS=0
-if has_format deb; then build_deb || STATUS=1; fi
-if has_format rpm; then build_rpm || STATUS=1; fi
-if has_format appimage; then build_appimage || STATUS=1; fi
+
+# Runs one packaging function with `set -e` really in force inside it. Calling
+# it as `build_x || STATUS=1` would switch errexit off for its whole body, so a
+# failed download or build step would be ignored and the step would stay green.
+run_format() {
+  local name="$1" function="$2" rc=0
+  set +e
+  ( set -e; "$function" )
+  rc=$?
+  set -e
+  if [[ "$rc" -ne 0 ]]; then
+    echo "::error::$name packaging failed (exit $rc)"
+    STATUS=1
+  fi
+}
+
+if has_format deb; then run_format DEB build_deb; fi
+if has_format rpm; then run_format RPM build_rpm; fi
+if has_format appimage; then run_format AppImage build_appimage; fi
 
 echo "Release files in $OUT:"
 ls -lh "$OUT"

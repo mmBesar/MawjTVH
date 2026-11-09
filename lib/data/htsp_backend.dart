@@ -108,6 +108,9 @@ class HtspBackend {
       const Duration(minutes: 30),
       (_) {
         backend._pruneEvents();
+        if (backend._guideEnd == null) {
+          unawaited(backend._probeGuideEnd());
+        }
         unawaited(backend._enable().catchError((Object _) {}));
       },
     );
@@ -160,18 +163,18 @@ class HtspBackend {
   /// server's guide reaches, so the guide offers exactly those days.
   Future<void> _probeGuideEnd() async {
     try {
-      final ids = <int>[];
+      // The three channels with the most programmes are the likeliest to
+      // show how far the server's guide really reaches.
+      final counts = <int, int>{};
       for (final event in _events.values) {
         final channelId = _int(event['channelId']);
-        if (channelId != null &&
-            _channels.containsKey(channelId) &&
-            !ids.contains(channelId)) {
-          ids.add(channelId);
-          if (ids.length >= 3) {
-            break;
-          }
+        if (channelId != null && _channels.containsKey(channelId)) {
+          counts[channelId] = (counts[channelId] ?? 0) + 1;
         }
       }
+      final ranked = counts.keys.toList()
+        ..sort((a, b) => counts[b]!.compareTo(counts[a]!));
+      final ids = ranked.take(3).toList(growable: false);
       final until = DateTime.now().add(const Duration(days: 21));
       await Future.wait(<Future<void>>[
         for (final id in ids) ensureEvents('$id', until),
@@ -214,6 +217,7 @@ class HtspBackend {
       }
       final reply = await _connection.request('getEvents', <String, Object?>{
         if (chainFrom != 0) 'eventId': chainFrom else 'channelId': id,
+        'numFollowing': 3000,
         'maxTime': until.millisecondsSinceEpoch ~/ 1000,
       });
       final rows = reply['events'];
