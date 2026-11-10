@@ -328,6 +328,16 @@ extension TvhStrings on AppStrings {
   String get pipHelp => isArabic
       ? 'عند الخروج من التطبيق أثناء المشاهدة يستمر الفيديو في نافذة صغيرة عائمة.'
       : 'Leaving the app while watching keeps the video in a small floating window.';
+  String get androidPlayerLabel =>
+      isArabic ? 'مشغّل الفيديو' : 'Video player';
+  String get androidPlayerBuiltIn =>
+      isArabic ? 'المدمج في التطبيق' : 'Built-in player';
+  String get androidPlayerHelp => isArabic
+      ? 'يمكن فتح القنوات والتسجيلات في mpv أو VLC (يجب تثبيته). عند الإغلاق بزر الرجوع يحفظ التطبيق موضع التوقف للتسجيلات ويعرض المتابعة في المرة التالية.'
+      : 'Channels and recordings can open in mpv or VLC (it must be installed). Closing it with Back saves where a recording stopped, and the app offers to resume next time.';
+  String externalPlayerMissing(String name) => isArabic
+      ? '$name غير مثبّت. تم استخدام المشغّل المدمج.'
+      : '$name is not installed. Using the built-in player.';
   String get pipButton => isArabic ? 'نافذة عائمة' : 'Floating window';
   String get noGuide => isArabic ? 'لا توجد بيانات دليل لهذه القناة' : 'No guide data for this channel';
   String get minutesShort => isArabic ? 'د' : 'min';

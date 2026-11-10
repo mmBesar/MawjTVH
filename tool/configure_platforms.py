@@ -98,17 +98,25 @@ def patch_android_manifest() -> None:
 MAIN_ACTIVITY = """package com.mmbesar.mawjtvh
 
 import android.app.PictureInPictureParams
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.util.Rational
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 // Picture-in-picture for the player: Dart asks to float the video, and
 // (optionally) the window floats by itself when the user leaves the app.
+// It also hands a stream to an external player (mpv, VLC) and returns where
+// that player stopped.
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
     private var autoEnter = false
+    private var playerResult: MethodChannel.Result? = null
+    private val playerRequest = 4711
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -124,6 +132,72 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mawjtvh/external_player")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "play" -> playExternal(call, result)
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    private fun playExternal(call: MethodCall, result: MethodChannel.Result) {
+        val url = call.argument<String>("url")
+        val pkg = call.argument<String>("package")
+        if (url == null || pkg == null) {
+            result.error("args", "url and package are required", null)
+            return
+        }
+        if (playerResult != null) {
+            result.error("busy", "A player is already open", null)
+            return
+        }
+        val title = call.argument<String>("title") ?: ""
+        val positionMs = call.argument<Number>("positionMs")?.toInt() ?: 0
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(Uri.parse(url), "video/*")
+            setPackage(pkg)
+            putExtra("title", title)
+            if (positionMs > 0) {
+                putExtra("position", positionMs)
+            }
+        }
+        playerResult = result
+        try {
+            startActivityForResult(intent, playerRequest)
+        } catch (e: ActivityNotFoundException) {
+            playerResult = null
+            result.error("missing", "$pkg is not installed", null)
+        } catch (e: Exception) {
+            playerResult = null
+            result.error("failed", e.message, null)
+        }
+    }
+
+    // mpv answers with position and duration, VLC with extra_position and
+    // extra_duration; both are milliseconds, as Int or Long.
+    private fun readMillis(data: Intent?, vararg keys: String): Long? {
+        val extras = data?.extras ?: return null
+        for (key in keys) {
+            val value = extras.get(key)
+            if (value is Int) return value.toLong()
+            if (value is Long) return value
+        }
+        return null
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode != playerRequest) {
+            super.onActivityResult(requestCode, resultCode, data)
+            return
+        }
+        val pending = playerResult
+        playerResult = null
+        val reply = HashMap<String, Any?>()
+        reply["code"] = resultCode
+        reply["position"] = readMillis(data, "position", "extra_position")
+        reply["duration"] = readMillis(data, "duration", "extra_duration")
+        pending?.success(reply)
     }
 
     private fun enterPip(): Boolean {
@@ -164,7 +238,7 @@ def patch_android_activity() -> None:
     if target.exists() and read(target) == MAIN_ACTIVITY:
         return
     write(target, MAIN_ACTIVITY)
-    print("  wrote MainActivity.kt (picture-in-picture)")
+    print("  wrote MainActivity.kt (picture-in-picture, external player)")
 
 
 SIGNING_HEADER = """import java.io.FileInputStream

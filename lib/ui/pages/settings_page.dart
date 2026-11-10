@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../core/app_info.dart';
 import '../../core/bidi.dart';
 import '../../core/catppuccin.dart';
+import '../../core/external_player.dart';
 import '../../core/platform.dart';
 import '../../core/theme.dart';
 import '../../core/ui_zoom.dart';
@@ -187,6 +188,35 @@ class SettingsPage extends StatelessWidget {
                               ),
                         ),
                       ),
+                    if (defaultTargetPlatform == TargetPlatform.android) ...<Widget>[
+                      const SizedBox(height: 12),
+                      _dropdown<String>(
+                        icon: Icons.smart_display_outlined,
+                        label: strings.androidPlayerLabel,
+                        value: ExternalPlayerApp.byId(settings.androidPlayer) == null
+                            ? 'builtin'
+                            : settings.androidPlayer,
+                        options: <(String, String)>[
+                          ('builtin', strings.androidPlayerBuiltIn),
+                          for (final app in ExternalPlayerApp.values)
+                            (app.id, app.label),
+                        ],
+                        onChanged: (value) => unawaited(
+                          state.updateSettings(
+                            settings.copyWith(androidPlayer: value),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          strings.androidPlayerHelp,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: colors.subtext0,
+                              ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 _Section(

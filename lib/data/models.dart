@@ -328,6 +328,7 @@ class AppSettings {
     this.activeSourceId,
     this.useMpvWindow = false,
     this.recordingsInMpv = false,
+    this.androidPlayer = 'builtin',
     this.hwdec = 'auto-safe',
     this.videoOutput = 'auto',
     this.useMpvConfig = true,
@@ -371,6 +372,10 @@ class AppSettings {
   /// Desktop only: recordings open in the mpv window even when live TV plays
   /// inside the app.
   final bool recordingsInMpv;
+
+  /// Android: 'builtin', or the id of an external player (see
+  /// ExternalPlayerApp) to hand streams to.
+  final String androidPlayer;
 
   /// mpv `--hwdec` value, picked from what the system reports.
   final String hwdec;
@@ -445,6 +450,7 @@ class AppSettings {
     Object? activeSourceId = _unset,
     bool? useMpvWindow,
     bool? recordingsInMpv,
+    String? androidPlayer,
     String? hwdec,
     String? videoOutput,
     bool? useMpvConfig,
@@ -477,6 +483,7 @@ class AppSettings {
           : activeSourceId as String?,
       useMpvWindow: useMpvWindow ?? this.useMpvWindow,
       recordingsInMpv: recordingsInMpv ?? this.recordingsInMpv,
+      androidPlayer: androidPlayer ?? this.androidPlayer,
       hwdec: hwdec ?? this.hwdec,
       videoOutput: videoOutput ?? this.videoOutput,
       useMpvConfig: useMpvConfig ?? this.useMpvConfig,
@@ -510,6 +517,7 @@ class AppSettings {
         'activeSourceId': activeSourceId,
         'useMpvWindow': useMpvWindow,
         'recordingsInMpv': recordingsInMpv,
+        'androidPlayer': androidPlayer,
         'hwdec': hwdec,
         'videoOutput': videoOutput,
         'useMpvConfig': useMpvConfig,
@@ -554,6 +562,7 @@ class AppSettings {
       activeSourceId: json['activeSourceId'] as String?,
       useMpvWindow: json['useMpvWindow'] as bool? ?? false,
       recordingsInMpv: json['recordingsInMpv'] as bool? ?? false,
+      androidPlayer: json['androidPlayer'] as String? ?? 'builtin',
       hwdec: json['hwdec'] as String? ?? 'auto-safe',
       videoOutput: json['videoOutput'] as String? ?? 'auto',
       useMpvConfig: json['useMpvConfig'] as bool? ?? true,

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.27
+
+- Android: an optional external player. Settings > Video player: built-in (default), mpv (mpv-android) or VLC. Both are open source. Channels and recordings open in the chosen app through the app's own stream proxy; closing it with Back brings you back here. For recordings the position where you stopped is saved (to the server, like the built-in player) and the resume prompt appears next time, then the player is started at that point. If the player is not installed, the built-in one is used and a message says so. Files saved on the device always use the built-in player.
+- Not changed: on Linux the external player is still the mpv window (Settings > Use mpv window).
+- Not verified on a device: both apps are told where to start with the `position` extra and report where they stopped in the result; this follows their documentation and mpv-android's source, but I could not run them. The app must stay running in the background while the external player is open, since the stream comes through it; Android may stop it on very low memory.
+
 ## 0.1.26
 
 Second part of the audit: the player pages, the stream proxy and the HTSP connection (read by a separate reviewer; each finding checked before changing anything).

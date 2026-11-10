@@ -14,6 +14,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../core/app_info.dart';
 import '../core/bidi.dart';
+import '../core/external_player.dart';
 import '../core/network_image.dart';
 import '../core/pip.dart';
 import '../core/platform.dart';
@@ -44,6 +45,15 @@ import 'widgets/wave.dart';
 Future<void> openPlayer(BuildContext context, Channel channel) async {
   final state = context.read<AppState>();
   final navigator = Navigator.of(context);
+  if (Platform.isAndroid) {
+    final app = ExternalPlayerApp.byId(state.settings.androidPlayer);
+    if (app != null && await _openExternal(context, state, channel, app)) {
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
+  }
   Widget page = PlayerPage(channel: channel);
   final inMpv = kIsDesktop &&
       (state.settings.useMpvWindow ||
@@ -87,6 +97,59 @@ Future<void> openPlayer(BuildContext context, Channel channel) async {
       reverseTransitionDuration: const Duration(milliseconds: 160),
     ),
   );
+}
+
+/// Hands [channel] to an external player on Android and waits until it is
+/// closed. Returns false when the built-in player should take over (the app
+/// is not installed, or the stream cannot be reached from another app).
+Future<bool> _openExternal(
+  BuildContext context,
+  AppState state,
+  Channel channel,
+  ExternalPlayerApp app,
+) async {
+  // A file on this device has no address another app can read.
+  if (channel.id.startsWith('${kRecordingIdPrefix}local:')) {
+    return false;
+  }
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final strings = context.strings;
+  final recording = isSyntheticChannel(channel);
+  Duration? startAt;
+  if (recording) {
+    final answer = await _askResumeDialog(context, channel);
+    if (answer.cancel) {
+      return true;
+    }
+    startAt = answer.at;
+  }
+  try {
+    final ready = await state.prepareStream(channel);
+    final result = await ExternalPlayer.play(
+      app: app,
+      url: ready.url,
+      title: ready.name,
+      start: startAt,
+    );
+    final position = result.position;
+    if (recording && position != null) {
+      state.savePosition(channel, position, result.duration ?? Duration.zero);
+    }
+    return true;
+  } on ExternalPlayerMissing {
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(strings.externalPlayerMissing(app.label)),
+        duration: const Duration(seconds: 8),
+      ),
+    );
+    return false;
+  } catch (error) {
+    messenger?.showSnackBar(SnackBar(content: Text('$error')));
+    return false;
+  } finally {
+    state.releaseStream(channel);
+  }
 }
 
 /// Asks whether to continue a recording that was left part-way; used before
