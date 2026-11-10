@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.28
+
+- Android: a foreground service (with a small "Feeding the external player" notification) now runs while mpv or VLC is open. My best explanation for mpv-android closing itself the moment you seek in a recording: the player is fed by a small server inside this app, and with another app in front Android can freeze this one, so the seek request is never answered and mpv quits. The service keeps the app running. Adds two permissions (foreground service, media playback type).
+- Not verified: I could not reproduce this and the stream proxy's range handling looked correct on reading, so this is the most likely cause, not a proven one. If mpv still closes on seek, please send the mpv-android log (`adb logcat -s mpv` or its in-app log) and a problem report from Settings.
+
 ## 0.1.27
 
 - Android: an optional external player. Settings > Video player: built-in (default), mpv (mpv-android) or VLC. Both are open source. Channels and recordings open in the chosen app through the app's own stream proxy; closing it with Back brings you back here. For recordings the position where you stopped is saved (to the server, like the built-in player) and the resume prompt appears next time, then the player is started at that point. If the player is not installed, the built-in one is used and a message says so. Files saved on the device always use the built-in player.

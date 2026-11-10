@@ -24,6 +24,8 @@ PERMISSIONS = (
     "android.permission.INTERNET",
     "android.permission.ACCESS_NETWORK_STATE",
     "android.permission.WAKE_LOCK",
+    "android.permission.FOREGROUND_SERVICE",
+    "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
 )
 
 DESKTOP_FILE = """[Desktop Entry]
@@ -84,6 +86,17 @@ def patch_android_manifest() -> None:
             text,
             count=1,
         )
+
+    if "KeepAliveService" not in text:
+        service = (
+            '    <service\n'
+            '        android:name=".KeepAliveService"\n'
+            '        android:exported="false"\n'
+            '        android:foregroundServiceType="mediaPlayback" />\n'
+        )
+        if "</application>" not in text:
+            raise SystemExit("Could not find </application>")
+        text = text.replace("</application>", service + "  </application>", 1)
 
     text = re.sub(
         r'android:label="[^"]*"',
@@ -163,14 +176,36 @@ class MainActivity : FlutterActivity() {
             }
         }
         playerResult = result
+        keepAlive(true)
         try {
             startActivityForResult(intent, playerRequest)
         } catch (e: ActivityNotFoundException) {
             playerResult = null
+            keepAlive(false)
             result.error("missing", "$pkg is not installed", null)
         } catch (e: Exception) {
             playerResult = null
+            keepAlive(false)
             result.error("failed", e.message, null)
+        }
+    }
+
+    // While the external player is in front, this app is in the background and
+    // Android may freeze it, which would stop the local server that feeds the
+    // player (it then fails the moment it seeks). A foreground service keeps
+    // the app running for as long as the player is open.
+    private fun keepAlive(on: Boolean) {
+        try {
+            val service = Intent(this, KeepAliveService::class.java)
+            if (!on) {
+                stopService(service)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(service)
+            } else {
+                startService(service)
+            }
+        } catch (e: Exception) {
+            // Playing still works without it; it is only a safeguard.
         }
     }
 
@@ -193,6 +228,7 @@ class MainActivity : FlutterActivity() {
         }
         val pending = playerResult
         playerResult = null
+        keepAlive(false)
         val reply = HashMap<String, Any?>()
         reply["code"] = resultCode
         reply["position"] = readMillis(data, "position", "extra_position")
@@ -229,6 +265,50 @@ class MainActivity : FlutterActivity() {
 """
 
 
+KEEP_ALIVE_SERVICE = """package com.mmbesar.mawjtvh
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
+import android.os.IBinder
+
+// Runs while an external player is open, so Android keeps the app (and the
+// local server that feeds the player) running in the background.
+class KeepAliveService : Service() {
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        val builder: Notification.Builder
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(
+                NotificationChannel("playback", "Playback", NotificationManager.IMPORTANCE_LOW)
+            )
+            builder = Notification.Builder(this, "playback")
+        } else {
+            builder = Notification.Builder(this)
+        }
+        val notification = builder
+            .setContentTitle("MawjTVH")
+            .setContentText("Feeding the external player")
+            .setSmallIcon(applicationInfo.icon)
+            .setOngoing(true)
+            .build()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(4712, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+        } else {
+            startForeground(4712, notification)
+        }
+        return START_NOT_STICKY
+    }
+}
+"""
+
+
 def patch_android_activity() -> None:
     kotlin = ANDROID / "app" / "src" / "main" / "kotlin" / "com" / "mmbesar" / "mawjtvh"
     if not (ANDROID / "app" / "src" / "main").is_dir():
@@ -238,6 +318,7 @@ def patch_android_activity() -> None:
     if target.exists() and read(target) == MAIN_ACTIVITY:
         return
     write(target, MAIN_ACTIVITY)
+    write(kotlin / "KeepAliveService.kt", KEEP_ALIVE_SERVICE)
     print("  wrote MainActivity.kt (picture-in-picture, external player)")
 
 
