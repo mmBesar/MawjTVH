@@ -265,6 +265,7 @@ class _PlayerPageState extends State<PlayerPage> {
   Completer<Duration?>? _resumeChoice;
   bool _resumeCancelled = false;
   bool _offered = false;
+  Duration? _resumeAt;
   Timer? _positionTimer;
   Map<String, String> _infoProps = const <String, String>{};
   double _osdValue = 0;
@@ -530,9 +531,19 @@ class _PlayerPageState extends State<PlayerPage> {
         if (!mounted || _resumeCancelled) {
           return;
         }
+        _resumeAt = resumeAt;
       }
     }
+    if (resumeAt == null && _isVod) {
+      // A retry carries on from where playback had got to, or from the point
+      // chosen in the resume prompt when it never got going.
+      final position = _player.state.position;
+      resumeAt = position > Duration.zero ? position : _resumeAt;
+    }
     await _stopLocalRecording(silent: true);
+    if (!mounted) {
+      return;
+    }
     _stallTimer?.cancel();
     setState(() {
       _error = null;
@@ -673,10 +684,13 @@ class _PlayerPageState extends State<PlayerPage> {
           }
         },
       );
-      _recorder = recorder;
-      if (mounted) {
-        setState(() {});
+      if (!mounted) {
+        // The page was left while the recording was starting.
+        unawaited(recorder.stop());
+        return;
       }
+      _recorder = recorder;
+      setState(() {});
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(strings.localRecordingStarted(path))));
@@ -1071,8 +1085,8 @@ class _PlayerPageState extends State<PlayerPage> {
       drawnWidth = viewport.width;
       drawnHeight = viewport.width / native;
     }
-    double scaleX;
-    double scaleY;
+    final double scaleX;
+    final double scaleY;
     if (_aspectMode == 4) {
       scaleX = scaleY = math.max(
         viewport.width / drawnWidth,
@@ -1757,8 +1771,9 @@ class _PlayerPageState extends State<PlayerPage> {
       try {
         await player.dispose();
       } catch (_) {}
-      release();
     }());
+    // Once, now: a second release after the player is gone could end a stream
+    // the page has meanwhile opened again for the same channel or recording.
     release();
     _stallTimer?.cancel();
     _hideTimer?.cancel();

@@ -250,10 +250,13 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
           }
         },
       );
-      _recorder = recorder;
-      if (mounted) {
-        setState(() {});
+      if (!mounted) {
+        // The page was left while the recording was starting.
+        unawaited(recorder.stop());
+        return;
       }
+      _recorder = recorder;
+      setState(() {});
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(strings.localRecordingStarted(path))));

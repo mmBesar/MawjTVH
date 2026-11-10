@@ -99,7 +99,11 @@ class HtspStreamProxy {
         : null;
     if (channel == null) {
       request.response.statusCode = HttpStatus.notFound;
-      await request.response.close();
+      try {
+        await request.response.close();
+      } catch (_) {
+        // The client has already gone.
+      }
       return;
     }
     final response = request.response
@@ -171,6 +175,12 @@ Future<_RecordingFile> _acquireRecording(
       file.size = _number(opened['size']) ?? 0;
     });
     await file.opening;
+    if (!identical(proxy._files[dvrId], file)) {
+      // The player left while the server was still opening the file; nothing
+      // else would close the handle that has just arrived.
+      _closeRecording(proxy, file);
+      throw HtspException('The recording was released');
+    }
     final id = file.fileId;
     if (id == null) {
       throw HtspException('The server did not open the recording');
@@ -663,7 +673,7 @@ class _Feed {
           }
           finish();
       }
-    });
+    }, onDone: finish);
 
     try {
       final reply = await _connection.request('subscribe', <String, Object?>{

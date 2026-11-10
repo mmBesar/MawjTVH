@@ -6,6 +6,9 @@ import 'package:flutter/foundation.dart';
 
 import '../core/network_image.dart';
 
+/// Counts the mpv sessions started, to give each its own IPC socket.
+int _mpvSessions = 0;
+
 /// What the system's mpv can do, found by asking it.
 @immutable
 class MpvCapabilities {
@@ -335,7 +338,9 @@ class MpvRuntime {
     final base = runtimeDir != null && Directory(runtimeDir).existsSync()
         ? runtimeDir
         : Directory.systemTemp.path;
-    final ipcPath = '$base/mawjtvh-mpv-$pid.sock';
+    // One socket per session: a session that is still shutting down must not
+    // delete the socket of the one that replaced it.
+    final ipcPath = '$base/mawjtvh-mpv-$pid-${++_mpvSessions}.sock';
     try {
       final stale = File(ipcPath);
       if (stale.existsSync()) {

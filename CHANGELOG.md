@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.26
+
+Second part of the audit: the player pages, the stream proxy and the HTSP connection (read by a separate reviewer; each finding checked before changing anything).
+
+- Leaving a recording or channel and opening it again at once could cut the new playback off: the old page released the stream a second time after its player had finished closing. It now releases once.
+- Retrying a recording after an error restarted it at 0:00 even when you had chosen to resume. A retry now continues from where playback had got to, or from the chosen resume point.
+- A local recording started with R and abandoned (going back) before the connection was up kept recording in the background. It is stopped now. Same fix in the mpv window page.
+- A server file handle could stay open until the session ended when a recording was closed while the server was still opening it; it is closed now.
+- The mpv window page: each mpv session has its own control socket. Before, reopening playback within a second and a half of leaving could lose control of the new mpv (pause, fullscreen and resume saving stopped working).
+- A dropped connection now ends a live stream's subscription at once instead of after up to 15 seconds; an unguarded close on a 404 and a `setState` after leaving the page were tidied.
+- Known, not changed: a paused live channel keeps queueing data in memory until playback resumes (no back-pressure); one slow request (over 30 s) ends the whole HTSP session; the loopback stream server has no access token, so another program on the same computer could read streams through it. These are design changes that need their own round.
+
 ## 0.1.25
 
 An audit of 0.1.23 and 0.1.24 (a separate reviewer read the code without my notes; I checked each finding).
