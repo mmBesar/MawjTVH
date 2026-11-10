@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.29
+
+- Fixed: after the Android app had been left open for a while, most recordings vanished from the list and the channel logos disappeared until the app was force closed. What I found by reading the code (not reproduced on a device):
+  - When the server connection dropped (Android cuts it while the app is in the background), the recordings refresh fell back to the web interface API, which a HTSP-only account cannot use or only partly sees, and replaced the list with that. It now keeps the list and waits for the reconnect.
+  - A reconnect that failed was never tried again, and one that finished its sync late (or cut short) was never passed on to the screens, so the app could stay on a partial list with no channels (no logos). Reconnects are now retried with a growing delay, a late sync is delivered as it arrives, and a reconnect that brings no channels is thrown away instead of replacing what is shown.
+
 ## 0.1.28
 
 - Android: a foreground service (with a small "Feeding the external player" notification) now runs while mpv or VLC is open. My best explanation for mpv-android closing itself the moment you seek in a recording: the player is fed by a small server inside this app, and with another app in front Android can freeze this one, so the seek request is never answered and mpv quits. The service keeps the app running. Adds two permissions (foreground service, media playback type).

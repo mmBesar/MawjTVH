@@ -228,6 +228,16 @@ class AppState extends ChangeNotifier {
         unawaited(content.htsp?.close());
         return;
       }
+      final previous = _content;
+      if (content.htsp != null &&
+          content.playlist.channels.isEmpty &&
+          previous != null &&
+          previous.playlist.channels.isNotEmpty) {
+        // The server answered but sent no channels yet (a sync cut short):
+        // keep what is shown rather than blanking the app.
+        unawaited(content.htsp?.close());
+        throw const TvhException('The server sent no channels; trying again.');
+      }
       _detachHtsp();
       _content = content;
       _attachHtsp(content.htsp);
@@ -243,6 +253,10 @@ class AppState extends ChangeNotifier {
       }
       _lastErrorMessage = _messageFor(error);
       _error = _lastErrorMessage;
+      final stale = _htspSession;
+      if (stale != null && stale.isClosed && !_disposed) {
+        _scheduleHtspRetry(stale);
+      }
       if (_content == null || _content!.playlist.channels.isEmpty) {
         _warnings = <LoadWarning>{};
       }
@@ -397,18 +411,24 @@ class AppState extends ChangeNotifier {
         if (!identical(_htspSession, backend) || _disposed) {
           return;
         }
-        // Connection lost: reload (and so reconnect) with a growing delay.
-        _htspFailures += 1;
-        final seconds = (_htspFailures * 5).clamp(5, 60).toInt();
-        _htspRetry?.cancel();
-        _htspRetry = Timer(Duration(seconds: seconds), () {
-          if (!_disposed && identical(_htspSession, backend)) {
-            unawaited(load());
-          }
-        });
+        _scheduleHtspRetry(backend);
         notifyListeners();
       }),
     );
+  }
+
+  /// Reloads (and so reconnects) after a growing delay. Called when the
+  /// connection drops, and again whenever a reconnect attempt fails, so the
+  /// app keeps trying instead of sitting on a dead session.
+  void _scheduleHtspRetry(HtspBackend backend) {
+    _htspFailures += 1;
+    final seconds = (_htspFailures * 5).clamp(5, 60).toInt();
+    _htspRetry?.cancel();
+    _htspRetry = Timer(Duration(seconds: seconds), () {
+      if (!_disposed && identical(_htspSession, backend)) {
+        unawaited(load());
+      }
+    });
   }
 
   void _detachHtsp() {
@@ -863,6 +883,12 @@ class AppState extends ChangeNotifier {
       _recordings = htsp.recordings();
       _recordingsError = null;
       notifyListeners();
+      return;
+    }
+    if (htsp != null) {
+      // The session dropped and is being re-established. Keep the list shown;
+      // the web interface may be off limits to this account (and would only
+      // return part of it), so it is not asked instead.
       return;
     }
     _recordingsLoading = true;

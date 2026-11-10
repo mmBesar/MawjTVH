@@ -98,7 +98,13 @@ class HtspBackend {
     }
     try {
       await backend._enable();
-      await backend._synced.future.timeout(syncTimeout, onTimeout: () {});
+      await backend._synced.future.timeout(syncTimeout, onTimeout: () {
+        // A slow server: carry on with what has arrived, and let the rest
+        // reach the app as it comes (changes are only passed on once synced).
+        if (!backend._synced.isCompleted) {
+          backend._synced.complete();
+        }
+      });
       unawaited(backend._probeGuideEnd());
     } catch (_) {
       await backend.close();
