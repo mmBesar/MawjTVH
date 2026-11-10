@@ -108,6 +108,11 @@ generated in CI and patched by `tool/configure_platforms.py`.
 
 ## Disclaimers
 
+- **Built with AI assistance.** MawjTVH is developed by me with the help of an
+  AI coding assistant (Claude, by Anthropic). I direct the work, test it on my
+  own devices and decide what ships, but much of the code was written or
+  refactored by the assistant and may contain mistakes a human would not make.
+  Treat it accordingly.
 - **Unofficial.** "Tvheadend" is the name of a separate project. MawjTVH is an
   independent client and is not affiliated with it.
 - **No warranty.** This software is provided as is, without warranty of any
