@@ -307,6 +307,9 @@ class AppState extends ChangeNotifier {
   /// Speed figures of the recording being played, for the problem report.
   String? get recordingStats => _htspSession?.recordingStats;
 
+  String? streamLayoutFor(Channel channel) =>
+      _htspSession?.streamLayoutFor(channel.id);
+
   final Map<String, String> _streamIssues = <String, String>{};
 
   /// Why the server cannot deliver [channel] right now (tuner busy, weak

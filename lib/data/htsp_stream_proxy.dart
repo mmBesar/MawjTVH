@@ -43,6 +43,10 @@ class HtspStreamProxy {
 
   /// How the last sizeable recording request went, for the problem report.
   String recordingStats = '';
+
+  /// The streams the server listed when each channel was last tuned, for the
+  /// problem report (what the channel sends, and which kinds are not carried).
+  final Map<int, String> streamLayouts = <int, String>{};
   final Map<int, _Feed> _feeds = <int, _Feed>{};
   final Map<int, _RecordingFile> _files = <int, _RecordingFile>{};
 
@@ -56,6 +60,9 @@ class HtspStreamProxy {
   }
 
   bool get isRunning => _server != null;
+
+  /// What the server listed for [channelId] the last time it was tuned.
+  String? streamLayoutFor(int channelId) => streamLayouts[channelId];
 
   /// Ends the subscription for [channelId] now and frees its tuner.
   void release(int channelId) => _feeds[channelId]?.stop();
@@ -152,6 +159,18 @@ class _RecordingFile {
   Timer? closeTimer;
   final Set<HttpRequest> requests = <HttpRequest>{};
 }
+
+/// Stream types the transport stream muxer passes on to the player.
+const Set<String> _carriedTypes = <String>{
+  'MPEG2VIDEO',
+  'H264',
+  'HEVC',
+  'MPEG2AUDIO',
+  'AAC',
+  'AC3',
+  'EAC3',
+  'DVBSUB',
+};
 
 /// Gets the shared handle for [dvrId], opening the file the first time.
 Future<_RecordingFile> _acquireRecording(
@@ -558,6 +577,19 @@ class _Feed {
           final streams = <TsStream>[];
           final raw = message['streams'];
           if (raw is List) {
+            final layout = <String>[];
+            for (final item in raw) {
+              if (item is Map) {
+                final kind = item['type'];
+                final lang = item['language'];
+                layout.add(
+                  '${item['index']} $kind'
+                  '${lang is String && lang.isNotEmpty ? ' ($lang)' : ''}'
+                  '${kind is String && _carriedTypes.contains(kind) ? '' : ' [not carried]'}',
+                );
+              }
+            }
+            proxy.streamLayouts[channel] = layout.join(', ');
             for (final item in raw) {
               if (item is Map) {
                 final index = item['index'];

@@ -286,6 +286,12 @@ class HtspBackend {
   /// Speed figures of the last recording served, for the problem report.
   String? get recordingStats => _proxy?.recordingStats;
 
+  /// The streams the server listed for [channelId] when it was last tuned.
+  String? streamLayoutFor(String channelId) {
+    final id = int.tryParse(channelId);
+    return id == null ? null : _proxy?.streamLayoutFor(id);
+  }
+
   Future<void> close() async {
     _closed = true;
     _signalIdle?.cancel();

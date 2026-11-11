@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.30
+
+- Diagnostics for the satellite subtitle problem (no fix yet). The problem report now lists the streams the server sends for the channel (type and language, with "[not carried]" for kinds the app cannot pass to the player), the player's audio and subtitle tracks, and the selected subtitle.
+- What I know from reading the code: only DVB subtitles (bitmap, `DVBSUB`) are passed on to the player. Teletext (`TELETEXT`) and text subtitles (`TEXTSUB`), which many satellite channels use, are dropped by the stream proxy, and Kodi's Tvheadend add-on does handle them. Which kind your channel sends decides the fix, so please copy the diagnostics from that channel.
+
 ## 0.1.29
 
 - Fixed: after the Android app had been left open for a while, most recordings vanished from the list and the channel logos disappeared until the app was force closed. What I found by reading the code (not reproduced on a device):

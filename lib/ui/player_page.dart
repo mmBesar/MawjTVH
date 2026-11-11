@@ -1652,6 +1652,15 @@ class _PlayerPageState extends State<PlayerPage> {
       ..writeln('Has video: $_hasVideo, stalled: $_stalled, '
           'buffering: $_buffering, playing: $_playing')
       ..writeln('Error: ${_error ?? '-'}');
+    final layout = _appState.streamLayoutFor(_channel);
+    if (layout != null && layout.isNotEmpty) {
+      buffer.writeln('Server streams: $layout');
+    }
+    final tracks = _player.state.tracks;
+    buffer
+      ..writeln('Player audio tracks: ${tracks.audio.map((t) => '${t.id}/${t.language ?? '-'}').join(', ')}')
+      ..writeln('Player subtitle tracks: ${tracks.subtitle.map((t) => '${t.id}/${t.language ?? '-'}').join(', ')}')
+      ..writeln('Selected subtitle: ${_player.state.track.subtitle.id}');
     if (_isVod) {
       final stats = _appState.recordingStats;
       if (stats != null && stats.isNotEmpty) {
