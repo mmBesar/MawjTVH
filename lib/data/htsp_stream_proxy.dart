@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'htsp_connection.dart';
+import 'text_subtitles.dart';
 import 'ts_muxer.dart';
 import 'tvh_models.dart';
 
@@ -21,6 +23,7 @@ class HtspStreamProxy {
     this.onSignal,
     this.onStatus,
     this.onSource,
+    this.onSubtitle,
   });
 
   final HtspConnection _connection;
@@ -38,6 +41,10 @@ class HtspStreamProxy {
   /// as the server reports it when a subscription starts.
   final void Function(String channelId, Map<String, String> info)? onSource;
 
+  /// Called with each text subtitle (`TEXTSUB`) of a watched channel; the
+  /// player draws them (an empty text clears the screen).
+  final void Function(String channelId, int stream, String text)? onSubtitle;
+
   HttpServer? _server;
   int _nextSubscription = 100;
 
@@ -47,6 +54,10 @@ class HtspStreamProxy {
   /// The streams the server listed when each channel was last tuned, for the
   /// problem report (what the channel sends, and which kinds are not carried).
   final Map<int, String> streamLayouts = <int, String>{};
+
+  /// Text subtitle streams of each channel's current subscription.
+  final Map<int, List<TextSubtitleStream>> textStreams =
+      <int, List<TextSubtitleStream>>{};
   final Map<int, _Feed> _feeds = <int, _Feed>{};
   final Map<int, _RecordingFile> _files = <int, _RecordingFile>{};
 
@@ -63,6 +74,9 @@ class HtspStreamProxy {
 
   /// What the server listed for [channelId] the last time it was tuned.
   String? streamLayoutFor(int channelId) => streamLayouts[channelId];
+
+  List<TextSubtitleStream> textStreamsFor(int channelId) =>
+      textStreams[channelId] ?? const <TextSubtitleStream>[];
 
   /// Ends the subscription for [channelId] now and frees its tuner.
   void release(int channelId) => _feeds[channelId]?.stop();
@@ -170,6 +184,7 @@ const Set<String> _carriedTypes = <String>{
   'AC3',
   'EAC3',
   'DVBSUB',
+  'TEXTSUB', // not muxed: handed to the app (see text_subtitles.dart)
 };
 
 /// Gets the shared handle for [dvrId], opening the file the first time.
@@ -554,6 +569,7 @@ class _Feed {
     final finished = Completer<void>();
     _current = finished;
     var delivered = false;
+    final textIndexes = <int>{};
     var unit90k = true;
     Timer? watchdog;
 
@@ -590,6 +606,21 @@ class _Feed {
               }
             }
             proxy.streamLayouts[channel] = layout.join(', ');
+            textIndexes.clear();
+            final texts = <TextSubtitleStream>[];
+            for (final item in raw) {
+              if (item is Map && item['type'] == 'TEXTSUB' && item['index'] is int) {
+                final lang = item['language'];
+                textIndexes.add(item['index'] as int);
+                texts.add(
+                  TextSubtitleStream(
+                    index: item['index'] as int,
+                    language: lang is String ? lang : '',
+                  ),
+                );
+              }
+            }
+            proxy.textStreams[channel] = texts;
             for (final item in raw) {
               if (item is Map) {
                 final index = item['index'];
@@ -634,6 +665,14 @@ class _Feed {
           final payload = message['payload'];
           final stream = message['stream'];
           if (payload is! Uint8List || stream is! int) {
+            return;
+          }
+          if (textIndexes.contains(stream)) {
+            proxy.onSubtitle?.call(
+              '$channel',
+              stream,
+              utf8.decode(payload, allowMalformed: true),
+            );
             return;
           }
           final frame = message['frametype'];

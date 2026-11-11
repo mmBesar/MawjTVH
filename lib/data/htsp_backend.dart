@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'htsp_connection.dart';
 import 'htsp_stream_proxy.dart';
 import 'models.dart';
+import 'text_subtitles.dart';
 import 'tvh_address.dart';
 import 'tvh_models.dart';
 
@@ -88,6 +89,13 @@ class HtspBackend {
         onStatus: (channelId, issue) =>
             backend.streamStatusListener?.call(channelId, issue),
         onSource: (channelId, info) => backend._sourceInfo[channelId] = info,
+        onSubtitle: (channelId, stream, text) {
+          if (!backend._textLines.isClosed) {
+            backend._textLines.add(
+              TextSubtitleLine(channelId: channelId, stream: stream, text: text),
+            );
+          }
+        },
       );
       try {
         await proxy.start();
@@ -286,6 +294,20 @@ class HtspBackend {
   /// Speed figures of the last recording served, for the problem report.
   String? get recordingStats => _proxy?.recordingStats;
 
+  final StreamController<TextSubtitleLine> _textLines =
+      StreamController<TextSubtitleLine>.broadcast();
+
+  /// Text subtitles of the channels being watched, as they arrive.
+  Stream<TextSubtitleLine> get textSubtitles => _textLines.stream;
+
+  /// The text subtitle streams of [channelId]'s current subscription.
+  List<TextSubtitleStream> textSubtitleStreamsFor(String channelId) {
+    final id = int.tryParse(channelId);
+    return id == null
+        ? const <TextSubtitleStream>[]
+        : _proxy?.textStreamsFor(id) ?? const <TextSubtitleStream>[];
+  }
+
   /// The streams the server listed for [channelId] when it was last tuned.
   String? streamLayoutFor(String channelId) {
     final id = int.tryParse(channelId);
@@ -302,6 +324,9 @@ class HtspBackend {
     await _connection.close();
     if (!_changes.isClosed) {
       await _changes.close();
+    }
+    if (!_textLines.isClosed) {
+      await _textLines.close();
     }
   }
 

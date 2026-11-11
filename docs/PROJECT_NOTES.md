@@ -72,7 +72,7 @@ Mawjac (his IPTV player). Not an IPTV player: it brings no channels.
 - Android app lost recordings and channel logos after a long time open;
   0.1.29 changes the reconnect/sync handling (found by reading, not
   reproduced).
-- Satellite subtitles do not show (reported 2026-11-11; Kodi shows them for the same channel). Only `DVBSUB` is muxed; `TELETEXT` and `TEXTSUB` are dropped in `lib/data/ts_muxer.dart`. 0.1.30 adds the stream list to the problem report to see which type the channel sends. Likely fixes: TEXTSUB as an overlay drawn by the app (libmpv cannot read text subtitles from a transport stream); TELETEXT needs a teletext decoder (mpv builds usually lack libzvbi).
+- Satellite subtitles (reported 2026-11-11; Kodi showed them). Tvheadend decodes teletext subtitle pages itself and sends `TEXTSUB` streams (UTF-8 + `<font color>`; empty text clears), see `src/parsers/parser_teletext.c` in tvheadend and `AddTVHStream` in kodi-pvr/pvr.hts. 0.1.31 hands them from the stream proxy (`onSubtitle`) to the in-app player, which draws them (`lib/data/text_subtitles.dart`, overlay in `player_page.dart`). Unverified; no timing correction; raw `TELETEXT` streams and the Linux mpv window still show nothing.
 - Design gaps: live pause has no back-pressure; one slow HTSP request can kill
   the session; the loopback proxy has no token; the "Tomorrow" day chip is
   stale after midnight; in-app Linux playback has baseline frame drops with
@@ -100,5 +100,6 @@ Mawjac (his IPTV player). Not an IPTV player: it brings no channels.
 - 0.1.28: foreground service while the external player is open.
 - 0.1.29: recordings/channels survive a dropped HTSP session.
 - 0.1.30: stream list and subtitle tracks in the problem report.
+- 0.1.31: teletext (TEXTSUB) subtitles drawn by the app.
 - 2026-11-11: AI-assistance disclosure added to the README; `AGENTS.md` and
   this file added; commits stay authored by `mmbesar` with no AI trailers.

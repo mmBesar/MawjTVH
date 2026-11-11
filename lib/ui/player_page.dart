@@ -23,6 +23,7 @@ import '../data/app_state.dart';
 import '../data/local_recorder.dart';
 import '../data/models.dart';
 import '../data/mpv_runtime.dart';
+import '../data/text_subtitles.dart';
 import '../data/track_prefs.dart';
 import '../l10n/strings.dart';
 import '../l10n/tvh_strings.dart';
@@ -317,6 +318,16 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _audioApplied = false;
   bool _subApplied = false;
   DateTime _ignoreTracksUntil = DateTime.fromMillisecondsSinceEpoch(0);
+
+  // Text subtitles. Tvheadend turns a channel's teletext subtitle pages into
+  // text streams that the player cannot read from the transport stream, so the
+  // stream proxy hands them to the app and they are drawn here.
+  List<TextSubtitleStream> _textStreams = const <TextSubtitleStream>[];
+  int? _textSelected;
+  bool _textPicked = false;
+  List<SubtitleSpan> _textSpans = const <SubtitleSpan>[];
+  Timer? _textClear;
+  StreamSubscription<TextSubtitleLine>? _textSub;
   StreamSubscription<Tracks>? _tracksSubscription;
   StreamSubscription<Track>? _trackSubscription;
   late AppState _appState;
@@ -338,6 +349,7 @@ class _PlayerPageState extends State<PlayerPage> {
     super.initState();
     _channel = widget.channel;
     _appState = context.read<AppState>();
+    _textSub = _appState.textSubtitleLines.listen(_onTextLine);
     PipService.init();
     unawaited(PipService.autoEnter(_appState.settings.pipOnLeave));
     PipService.active.addListener(_onPip);
@@ -624,6 +636,11 @@ class _PlayerPageState extends State<PlayerPage> {
     _subApplied = false;
     _lastAudioId = null;
     _lastSubtitleId = null;
+    _textClear?.cancel();
+    _textStreams = const <TextSubtitleStream>[];
+    _textSelected = null;
+    _textPicked = false;
+    _textSpans = const <SubtitleSpan>[];
     if (!auto) {
       _flashBanner();
     }
@@ -1326,9 +1343,11 @@ class _PlayerPageState extends State<PlayerPage> {
 
   void _cycleSubtitle() {
     final strings = context.strings;
+    _refreshTextStreams();
     final subtitles =
         _player.state.tracks.subtitle.where((t) => _realTrack(t.id)).toList();
-    if (subtitles.isEmpty) {
+    final texts = _textStreams;
+    if (subtitles.isEmpty && texts.isEmpty) {
       _showMessage(
         Icons.subtitles_off_rounded,
         strings.subtitleLabel,
@@ -1339,14 +1358,211 @@ class _PlayerPageState extends State<PlayerPage> {
     _subApplied = true;
     _lastSubtitleId ??= _player.state.track.subtitle.id;
     final currentId = _player.state.track.subtitle.id;
-    final index = subtitles.indexWhere((t) => t.id == currentId);
-    if (currentId == 'no' || currentId == 'auto' || index < 0) {
-      unawaited(_player.setSubtitleTrack(subtitles.first));
-    } else if (index + 1 < subtitles.length) {
-      unawaited(_player.setSubtitleTrack(subtitles[index + 1]));
+    // The choices in order: the player's own tracks, then the text streams,
+    // then off.
+    var current = -1;
+    final textIndex = texts.indexWhere((s) => s.index == _textSelected);
+    if (_textSelected != null && textIndex >= 0) {
+      current = subtitles.length + textIndex;
+    } else if (currentId != 'no' && currentId != 'auto') {
+      current = subtitles.indexWhere((t) => t.id == currentId);
+    }
+    final next = current + 1;
+    if (next < subtitles.length) {
+      _clearTextSelection();
+      unawaited(_player.setSubtitleTrack(subtitles[next]));
+    } else if (next < subtitles.length + texts.length) {
+      _selectText(texts[next - subtitles.length].index);
     } else {
+      if (_textSelected != null) {
+        _selectText(null);
+      }
+      if (currentId != 'no') {
+        unawaited(_player.setSubtitleTrack(SubtitleTrack.no()));
+      }
+    }
+  }
+
+  // ---- Text subtitles -----------------------------------------------------
+
+  /// Reads which text subtitle streams the channel has, and on the first
+  /// sight picks one by the preferred language (unless the player has real
+  /// subtitle tracks of its own, which are handled by [_applyTracks]).
+  void _refreshTextStreams() {
+    if (!mounted || _isVod) {
+      return;
+    }
+    final streams = _appState.textSubtitleStreams(_channel);
+    var same = streams.length == _textStreams.length;
+    for (var i = 0; same && i < streams.length; i++) {
+      same = streams[i].index == _textStreams[i].index;
+    }
+    if (!same) {
+      setState(() => _textStreams = streams);
+    }
+    if (_textPicked || streams.isEmpty) {
+      return;
+    }
+    if (_player.state.tracks.subtitle.any((t) => _realTrack(t.id))) {
+      return;
+    }
+    _textPicked = true;
+    final settings = _appState.settings;
+    final remembered = settings.rememberTracks
+        ? _appState.rememberedTrack(_channel, audio: false)
+        : null;
+    final off = remembered == 'off' ||
+        (remembered == null && settings.preferredSubtitleLang == 'off');
+    if (off) {
+      return;
+    }
+    final index = pickTrack(
+      <({String? language, String? title})>[
+        for (final s in streams) (language: s.language, title: null),
+      ],
+      remembered: remembered,
+      preferred: settings.preferredSubtitleLang,
+    );
+    if (index != null) {
+      setState(() => _textSelected = streams[index].index);
+    }
+  }
+
+  void _clearTextSelection() {
+    _textClear?.cancel();
+    if (_textSelected != null || _textSpans.isNotEmpty) {
+      setState(() {
+        _textSelected = null;
+        _textSpans = const <SubtitleSpan>[];
+      });
+    }
+  }
+
+  /// Chooses a text subtitle stream (null: none), turning the player's own
+  /// subtitles off, and remembers the choice for the channel.
+  void _selectText(int? index) {
+    if (!mounted) {
+      return;
+    }
+    final strings = context.strings;
+    final remember = _appState.settings.rememberTracks;
+    _textPicked = true;
+    final had = _textSelected != null;
+    _textClear?.cancel();
+    setState(() {
+      _textSelected = index;
+      _textSpans = const <SubtitleSpan>[];
+    });
+    if (index == null) {
+      if (had) {
+        if (remember) {
+          _appState.rememberTrack(_channel, audio: false, key: 'off');
+        }
+        _showMessage(
+          Icons.subtitles_off_rounded,
+          strings.subtitleLabel,
+          strings.subtitlesOff,
+        );
+      }
+      return;
+    }
+    if (_player.state.track.subtitle.id != 'no') {
+      _subApplied = true;
+      _lastSubtitleId = 'no';
+      _ignoreTracksUntil = DateTime.now().add(const Duration(seconds: 2));
       unawaited(_player.setSubtitleTrack(SubtitleTrack.no()));
     }
+    final position = _textStreams.indexWhere((s) => s.index == index);
+    final language = position < 0 ? '' : _textStreams[position].language;
+    if (remember) {
+      _appState.rememberTrack(
+        _channel,
+        audio: false,
+        key: trackKey(language, null),
+      );
+    }
+    _showMessage(
+      Icons.subtitles_rounded,
+      strings.subtitleLabel,
+      trackLabel(
+        context,
+        index: position < 0 ? 0 : position,
+        language: language,
+        title: null,
+        codec: null,
+      ),
+    );
+  }
+
+  void _onTextLine(TextSubtitleLine line) {
+    if (!mounted || _isVod || line.channelId != _channel.id) {
+      return;
+    }
+    if (_textStreams.every((s) => s.index != line.stream)) {
+      _refreshTextStreams();
+    }
+    if (line.stream != _textSelected) {
+      return;
+    }
+    final spans = parseSubtitleSpans(line.text);
+    _textClear?.cancel();
+    if (spans.isNotEmpty) {
+      // A subtitle is normally replaced or cleared by the next line; this is
+      // only a safety net.
+      _textClear = Timer(const Duration(seconds: 12), () {
+        if (mounted) {
+          setState(() => _textSpans = const <SubtitleSpan>[]);
+        }
+      });
+    }
+    setState(() => _textSpans = spans);
+  }
+
+  Widget _textSubtitleOverlay() {
+    return Positioned(
+      left: 24,
+      right: 24,
+      bottom: _isDesktop ? 72 : 56,
+      child: IgnorePointer(
+        child: Text.rich(
+          TextSpan(
+            children: <InlineSpan>[
+              for (final span in _textSpans)
+                TextSpan(
+                  text: span.text,
+                  style: TextStyle(
+                    color: span.color == null ? Colors.white : Color(span.color!),
+                  ),
+                ),
+            ],
+          ),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: _isDesktop ? 26 : 20,
+            height: 1.25,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+            shadows: const <Shadow>[
+              Shadow(blurRadius: 3, color: Colors.black, offset: Offset(1, 1)),
+              Shadow(blurRadius: 3, color: Colors.black, offset: Offset(-1, -1)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openTrackSheet() {
+    _refreshTextStreams();
+    unawaited(
+      showTrackSheet(
+        context,
+        _player,
+        text: _textStreams,
+        textSelected: _textSelected,
+        onText: _selectText,
+      ),
+    );
   }
 
   /// Number keys build a channel number; it tunes after a short pause, or at
@@ -1391,6 +1607,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (!mounted) {
       return;
     }
+    _refreshTextStreams();
     final settings = _appState.settings;
     final remember = settings.rememberTracks;
     if (!_audioApplied) {
@@ -1809,6 +2026,8 @@ class _PlayerPageState extends State<PlayerPage> {
     // playback at once, even if the player takes a while to shut down.
     _positionTimer?.cancel();
     _statsTimer?.cancel();
+    _textClear?.cancel();
+    unawaited(_textSub?.cancel());
     WidgetsBinding.instance.removeTimingsCallback(_onFrameTimings);
     final choice = _resumeChoice;
     if (choice != null && !choice.isCompleted) {
@@ -1970,7 +2189,7 @@ class _PlayerPageState extends State<PlayerPage> {
           const SingleActivator(LogicalKeyboardKey.keyG): _openEpg,
           const SingleActivator(LogicalKeyboardKey.f1): _toggleHelp,
           const SingleActivator(LogicalKeyboardKey.keyS): () {
-            unawaited(showTrackSheet(context, _player));
+            _openTrackSheet();
           },
           const SingleActivator(LogicalKeyboardKey.keyA): _cycleAudio,
           const SingleActivator(LogicalKeyboardKey.keyJ): _cycleSubtitle,
@@ -2265,6 +2484,8 @@ class _PlayerPageState extends State<PlayerPage> {
                       color: Colors.black.withValues(alpha: dim),
                     ),
                   ),
+                if (_textSelected != null && _textSpans.isNotEmpty)
+                  _textSubtitleOverlay(),
                 if (tuning)
                   Center(
                     child: Column(
@@ -2733,7 +2954,7 @@ class _PlayerPageState extends State<PlayerPage> {
                           icon(Icons.list_rounded, strings.channelListTooltip,
                               _openBrowser),
                           icon(Icons.subtitles_rounded, strings.audioAndSubtitles,
-                              () => unawaited(showTrackSheet(context, _player))),
+                              _openTrackSheet),
                           if (!compact) ...<Widget>[
                             icon(Icons.aspect_ratio_rounded, strings.aspectTooltip,
                                 _cycleAspect),
@@ -3008,8 +3229,7 @@ class _PlayerPageState extends State<PlayerPage> {
                           _RoundButton(
                             tooltip: strings.audioAndSubtitles,
                             icon: Icons.subtitles_rounded,
-                            onPressed: () =>
-                                unawaited(showTrackSheet(context, _player)),
+                            onPressed: _openTrackSheet,
                           ),
                           const SizedBox(width: 8),
                           _RoundButton(

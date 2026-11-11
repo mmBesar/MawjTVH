@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.31
+
+- Satellite (teletext) subtitles. I read how Tvheadend and Kodi's Tvheadend add-on do it: Tvheadend decodes a channel's teletext subtitle pages itself and sends each one to clients as a text stream (`TEXTSUB`, UTF-8 with `<font color>` tags; an empty text clears the screen). Kodi shows them; MawjTVH was dropping every stream type except DVB bitmap subtitles. A transport stream has no standard way to carry text subtitles to the player, so the stream proxy now hands these lines to the app, which draws them over the video.
+- They appear in the subtitle menu (the list now has the channel's text subtitles, by language), on the J key (cycles the player's own tracks, then the text ones, then off) and follow the "preferred subtitle language" setting and the per-channel memory, like the other tracks.
+- Live channels in the in-app player only. The Linux mpv window and recordings are unchanged. Raw `TELETEXT` streams (pages not converted by the server) are still not shown.
+- Not verified: no device or server here. Timing is "when the server sends the line", with no delay correction, so a subtitle may show a moment before or after the speech. The 0.1.30 diagnostics remain; the "Server streams" line now lists `TEXTSUB` without "[not carried]".
+
 ## 0.1.30
 
 - Diagnostics for the satellite subtitle problem (no fix yet). The problem report now lists the streams the server sends for the channel (type and language, with "[not carried]" for kinds the app cannot pass to the player), the player's audio and subtitle tracks, and the selected subtitle.

@@ -5,26 +5,49 @@ import 'package:media_kit/media_kit.dart';
 
 import '../../core/bidi.dart';
 import '../../core/theme.dart';
+import '../../data/text_subtitles.dart';
 import '../../l10n/languages.dart';
 import '../../l10n/strings.dart';
 import '../../l10n/tvh_strings.dart';
 
 /// Audio and subtitle choices of the running stream, with real language names.
-Future<void> showTrackSheet(BuildContext context, Player player) {
+///
+/// [text] are the channel's text subtitle streams (drawn by the app, not the
+/// player); [onText] is told which one was chosen, or null for none.
+Future<void> showTrackSheet(
+  BuildContext context,
+  Player player, {
+  List<TextSubtitleStream> text = const <TextSubtitleStream>[],
+  int? textSelected,
+  ValueChanged<int?>? onText,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
     constraints: const BoxConstraints(maxWidth: 560),
-    builder: (context) => _TrackSheet(player: player),
+    builder: (context) => _TrackSheet(
+      player: player,
+      text: text,
+      textSelected: textSelected,
+      onText: onText,
+    ),
   );
 }
 
 class _TrackSheet extends StatelessWidget {
-  const _TrackSheet({required this.player});
+  const _TrackSheet({
+    required this.player,
+    required this.text,
+    required this.textSelected,
+    required this.onText,
+  });
 
   final Player player;
+  final List<TextSubtitleStream> text;
+  final int? textSelected;
+  final ValueChanged<int?>? onText;
 
   static bool _real(String id) => id != 'auto' && id != 'no';
 
@@ -89,20 +112,48 @@ class _TrackSheet extends StatelessWidget {
                   const SizedBox(height: 8),
                   _Heading(text: strings.subtitleTracks),
                   _Choice(
-                    selected: selected.subtitle.id == 'no',
-                    onTap: () =>
-                        unawaited(player.setSubtitleTrack(SubtitleTrack.no())),
+                    selected:
+                        selected.subtitle.id == 'no' && textSelected == null,
+                    onTap: () {
+                      onText?.call(null);
+                      unawaited(player.setSubtitleTrack(SubtitleTrack.no()));
+                      if (textSelected != null) {
+                        Navigator.of(context).pop();
+                      }
+                    },
                     title: Text(strings.subtitlesOff),
                   ),
-                  if (subtitles.isEmpty)
-                    _Empty(text: strings.noTracks)
-                  else
+                  if (subtitles.isEmpty && text.isEmpty)
+                    _Empty(text: strings.noTracks),
+                  for (var i = 0; i < text.length; i++)
+                    _Choice(
+                      selected: textSelected == text[i].index,
+                      onTap: () {
+                        onText?.call(text[i].index);
+                        Navigator.of(context).pop();
+                      },
+                      title: BidiText(
+                        _label(
+                          context,
+                          index: i,
+                          language: text[i].language,
+                          title: null,
+                          codec: null,
+                        ),
+                      ),
+                    ),
+                  if (subtitles.isNotEmpty)
                     for (var i = 0; i < subtitles.length; i++)
                       _Choice(
-                        selected: selected.subtitle.id == subtitles[i].id,
-                        onTap: () => unawaited(
-                          player.setSubtitleTrack(subtitles[i]),
-                        ),
+                        selected: textSelected == null &&
+                            selected.subtitle.id == subtitles[i].id,
+                        onTap: () {
+                          onText?.call(null);
+                          unawaited(player.setSubtitleTrack(subtitles[i]));
+                          if (textSelected != null) {
+                            Navigator.of(context).pop();
+                          }
+                        },
                         title: BidiText(
                           _label(
                             context,

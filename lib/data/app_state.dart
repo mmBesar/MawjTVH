@@ -12,6 +12,7 @@ import 'htsp_backend.dart';
 import 'htsp_connection.dart';
 import 'models.dart';
 import 'storage.dart';
+import 'text_subtitles.dart';
 import 'tvh_client.dart';
 import 'tvh_loader.dart';
 import 'tvh_models.dart';
@@ -307,6 +308,17 @@ class AppState extends ChangeNotifier {
   /// Speed figures of the recording being played, for the problem report.
   String? get recordingStats => _htspSession?.recordingStats;
 
+  final StreamController<TextSubtitleLine> _textLines =
+      StreamController<TextSubtitleLine>.broadcast();
+  StreamSubscription<TextSubtitleLine>? _textSub;
+
+  /// Text subtitles of the live channel being watched (see text_subtitles.dart).
+  Stream<TextSubtitleLine> get textSubtitleLines => _textLines.stream;
+
+  List<TextSubtitleStream> textSubtitleStreams(Channel channel) =>
+      _htspSession?.textSubtitleStreamsFor(channel.id) ??
+      const <TextSubtitleStream>[];
+
   String? streamLayoutFor(Channel channel) =>
       _htspSession?.streamLayoutFor(channel.id);
 
@@ -409,6 +421,8 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     };
     _htspChanges = backend.changes.listen((_) => _applyHtspChange(backend));
+    unawaited(_textSub?.cancel());
+    _textSub = backend.textSubtitles.listen(_textLines.add);
     unawaited(
       backend.closed.then((_) {
         if (!identical(_htspSession, backend) || _disposed) {
@@ -439,6 +453,8 @@ class AppState extends ChangeNotifier {
     _htspRetry = null;
     unawaited(_htspChanges?.cancel());
     _htspChanges = null;
+    unawaited(_textSub?.cancel());
+    _textSub = null;
     final session = _htspSession;
     _htspSession = null;
     if (session != null) {
@@ -1084,6 +1100,7 @@ class AppState extends ChangeNotifier {
     _loadGeneration++;
     _ticker?.cancel();
     _detachHtsp();
+    unawaited(_textLines.close());
     super.dispose();
   }
 }
