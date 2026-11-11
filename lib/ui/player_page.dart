@@ -1628,6 +1628,8 @@ class _PlayerPageState extends State<PlayerPage> {
             _ignoreTracksUntil = DateTime.now().add(const Duration(seconds: 2));
             unawaited(_player.setAudioTrack(audio[index]));
           }
+        } else {
+          unawaited(_pinAudio(audio));
         }
       }
     }
@@ -1658,9 +1660,47 @@ class _PlayerPageState extends State<PlayerPage> {
             _lastSubtitleId = subs[index].id;
             _ignoreTracksUntil = DateTime.now().add(const Duration(seconds: 2));
             unawaited(_player.setSubtitleTrack(subs[index]));
+          } else {
+            // Nothing matches the preference: show it as off rather than
+            // leaving the menu with nothing ticked.
+            _subApplied = true;
+            _lastSubtitleId = 'no';
+            if (_player.state.track.subtitle.id != 'no') {
+              _ignoreTracksUntil =
+                  DateTime.now().add(const Duration(seconds: 2));
+              unawaited(_player.setSubtitleTrack(SubtitleTrack.no()));
+            }
           }
         }
       }
+    }
+  }
+
+  /// With no remembered or preferred language the player picks the audio
+  /// track itself and reports it as "auto", so the menu showed nothing ticked
+  /// and the first change the user made was not remembered. This asks which
+  /// track it is really playing and selects that one explicitly.
+  Future<void> _pinAudio(List<AudioTrack> audio) async {
+    final platform = _player.platform;
+    if (platform is! NativePlayer) {
+      return;
+    }
+    try {
+      final id = await platform.getProperty('current-tracks/audio/id');
+      if (!mounted) {
+        return;
+      }
+      final match = audio.where((t) => t.id == id).firstOrNull;
+      if (match == null) {
+        return;
+      }
+      _lastAudioId = match.id;
+      if (_player.state.track.audio.id != match.id) {
+        _ignoreTracksUntil = DateTime.now().add(const Duration(seconds: 2));
+        await _player.setAudioTrack(match);
+      }
+    } catch (_) {
+      // Not available in this libmpv build: the menu just shows no tick.
     }
   }
 

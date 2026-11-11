@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.32
+
+- Fixed: DVB (bitmap) subtitles never showed. Your diagnostics showed the channel sends `DVBSUB` and the player even listed and selected the tracks, but nothing was drawn. Tvheadend's source shows why: it removes the two bytes that open a DVB subtitle packet (data identifier 0x20 and stream id 0x00) and its end marker (0xFF) before sending it over HTSP, and the decoder needs them in the transport stream. The muxer now puts them back (with a test). Not yet seen on a real channel.
+- Fixed: the audio menu showed nothing ticked when no language had been chosen (the player reports its own pick as "auto"), and the first audio change made in that state was not remembered. The app now asks the player which track it really plays and selects it explicitly. The same for subtitles when nothing matches the preferred language (shown as Off).
+- Remembering audio and subtitle per channel already existed (Settings > remember tracks, on by default). Tvheadend has no place to store such a preference per user, so it is kept on each device, per source and channel.
+
 ## 0.1.31
 
 - Satellite (teletext) subtitles. I read how Tvheadend and Kodi's Tvheadend add-on do it: Tvheadend decodes a channel's teletext subtitle pages itself and sends each one to clients as a text stream (`TEXTSUB`, UTF-8 with `<font color>` tags; an empty text clears the screen). Kodi shows them; MawjTVH was dropping every stream type except DVB bitmap subtitles. A transport stream has no standard way to carry text subtitles to the player, so the stream proxy now hands these lines to the app, which draws them over the video.

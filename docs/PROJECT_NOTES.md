@@ -101,5 +101,6 @@ Mawjac (his IPTV player). Not an IPTV player: it brings no channels.
 - 0.1.29: recordings/channels survive a dropped HTSP session.
 - 0.1.30: stream list and subtitle tracks in the problem report.
 - 0.1.31: teletext (TEXTSUB) subtitles drawn by the app.
+- 0.1.32: DVBSUB fix (Tvheadend strips 0x20 0x00 and the 0xFF end marker from the packet; the muxer restores them); audio/subtitle menu ticks and first-change memory fixed.
 - 2026-11-11: AI-assistance disclosure added to the README; `AGENTS.md` and
   this file added; commits stay authored by `mmbesar` with no AI trailers.

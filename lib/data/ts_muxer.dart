@@ -67,6 +67,7 @@ class TsMuxer {
         streamType: info.streamType,
         streamId: streamId,
         video: isVideo,
+        subtitle: info.subtitle,
         language: stream.language,
         headers: isVideo ? _parameterSets(stream) : null,
         nalLength: isVideo ? _nalLengthSize(stream) : 0,
@@ -124,6 +125,8 @@ class TsMuxer {
     var data = payload;
     if (track.video) {
       data = _prepareVideo(track, payload, keyframe);
+    } else if (track.subtitle) {
+      data = _wrapSubtitle(payload);
     }
     final effectivePts = pts ?? dts;
     if (effectivePts == null) {
@@ -132,6 +135,22 @@ class TsMuxer {
     final pes = _pes(track, data, effectivePts, dts != null && dts != pts ? dts : null);
     final pcr = track.pid == _pcrPid ? ((dts ?? effectivePts) - 9000) : null;
     return _packetise(track.pid, pes, pcr: pcr, random: keyframe);
+  }
+
+  /// Tvheadend hands over a DVB subtitle packet without the two bytes that
+  /// open the PES data field (data identifier 0x20, stream id 0x00) and without
+  /// the end marker (0xFF). Decoders expect them in the transport stream, so
+  /// they are put back; without them no subtitle is ever drawn.
+  static Uint8List _wrapSubtitle(Uint8List payload) {
+    if (payload.length >= 2 && payload[0] == 0x20 && payload[1] == 0x00) {
+      return payload; // already complete
+    }
+    final out = Uint8List(payload.length + 3);
+    out[0] = 0x20;
+    out[1] = 0x00;
+    out.setRange(2, 2 + payload.length, payload);
+    out[out.length - 1] = 0xFF;
+    return out;
   }
 
   // ---- video helpers -------------------------------------------------------
@@ -484,6 +503,7 @@ class _Track {
     required this.streamType,
     required this.streamId,
     required this.video,
+    required this.subtitle,
     required this.language,
     required this.headers,
     required this.nalLength,
@@ -494,6 +514,7 @@ class _Track {
   final int streamType;
   final int streamId;
   final bool video;
+  final bool subtitle;
   final String language;
   final Uint8List? headers;
   final int nalLength;

@@ -106,4 +106,36 @@ void main() {
     }
     expect(found, isTrue);
   });
+
+  test('a DVB subtitle packet gets its data identifier and end marker back', () {
+    final mux = TsMuxer()
+      ..configure(const <TsStream>[
+        TsStream(index: 1, type: 'H264'),
+        TsStream(
+          index: 4,
+          type: 'DVBSUB',
+          language: 'eng',
+          compositionId: 1,
+          ancillaryId: 2,
+        ),
+      ]);
+    // What Tvheadend sends: segments only, starting with the sync byte 0x0F.
+    final segments = Uint8List.fromList(<int>[0x0f, 0x10, 0, 1, 0, 3, 1, 2, 3]);
+    final bytes = mux.packet(
+      stream: 4,
+      payload: segments,
+      pts: 90000,
+      dts: null,
+      keyframe: false,
+    )!;
+    expect(bytes.length, 188);
+    var offset = 4;
+    if (bytes[3] & 0x20 != 0) {
+      offset += 1 + bytes[4];
+    }
+    // PES start code, private stream 1, then a header with only a PTS.
+    expect(bytes.sublist(offset, offset + 4), <int>[0, 0, 1, 0xBD]);
+    final data = bytes.sublist(offset + 14);
+    expect(data, <int>[0x20, 0x00, ...segments, 0xFF]);
+  });
 }
