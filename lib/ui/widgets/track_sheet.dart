@@ -20,6 +20,7 @@ Future<void> showTrackSheet(
   List<TextSubtitleStream> text = const <TextSubtitleStream>[],
   int? textSelected,
   ValueChanged<int?>? onText,
+  String? Function(bool audio, String id, String? language)? languageOf,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -32,6 +33,7 @@ Future<void> showTrackSheet(
       text: text,
       textSelected: textSelected,
       onText: onText,
+      languageOf: languageOf,
     ),
   );
 }
@@ -42,12 +44,14 @@ class _TrackSheet extends StatelessWidget {
     required this.text,
     required this.textSelected,
     required this.onText,
+    required this.languageOf,
   });
 
   final Player player;
   final List<TextSubtitleStream> text;
   final int? textSelected;
   final ValueChanged<int?>? onText;
+  final String? Function(bool audio, String id, String? language)? languageOf;
 
   static bool _real(String id) => id != 'auto' && id != 'no';
 
@@ -60,7 +64,7 @@ class _TrackSheet extends StatelessWidget {
     required String? codec,
   }) {
     final arabic = context.strings.isArabic;
-    final name = languageName(language, arabic: arabic);
+    final name = trackLanguageName(language, arabic: arabic);
     final extra = <String>[
       if (title != null && title.trim().isNotEmpty && title.trim() != name) title.trim(),
       if (codec != null && codec.trim().isNotEmpty) codec.trim().toUpperCase(),
@@ -103,7 +107,9 @@ class _TrackSheet extends StatelessWidget {
                           _label(
                             context,
                             index: i,
-                            language: audio[i].language,
+                            language: languageOf?.call(
+                                    true, audio[i].id, audio[i].language) ??
+                                audio[i].language,
                             title: audio[i].title,
                             codec: audio[i].codec,
                           ),
@@ -158,7 +164,9 @@ class _TrackSheet extends StatelessWidget {
                           _label(
                             context,
                             index: i,
-                            language: subtitles[i].language,
+                            language: languageOf?.call(
+                                    false, subtitles[i].id, subtitles[i].language) ??
+                                subtitles[i].language,
                             title: subtitles[i].title,
                             codec: subtitles[i].codec,
                           ),

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.33
+
+- Fixed, for real this time: DVB subtitles stayed invisible. The stream data was right after 0.1.32, but the video library (media_kit) starts libmpv with subtitle drawing switched off, because it draws text subtitles in its own view and that view cannot draw bitmap subtitles. The player now switches mpv's drawing on while a bitmap subtitle track (DVB) is selected and leaves text subtitles to the old view.
+- Track names: codes that are not languages now read properly: `org` and `qaa` are "Original", `und` is "Unnamed", `mul` "Multiple languages", `zxx` "No speech", `mis` "Other" (English and Arabic). The player is not told the language of a stream the server calls `und`, so it showed "Track 2"; the app now takes the language from the server's stream list (same order as the player's tracks) for live channels.
+- Honest limit: Tvheadend replaces a language code it does not know (such as `org`) with `und` before sending it, so the real code never reaches the app. When a channel has one unlabelled plain audio stream next to labelled ones, it is shown as "Original". That is an inference, not something the server says.
+
 ## 0.1.32
 
 - Fixed: DVB (bitmap) subtitles never showed. Your diagnostics showed the channel sends `DVBSUB` and the player even listed and selected the tracks, but nothing was drawn. Tvheadend's source shows why: it removes the two bytes that open a DVB subtitle packet (data identifier 0x20 and stream id 0x00) and its end marker (0xFF) before sending it over HTSP, and the decoder needs them in the transport stream. The muxer now puts them back (with a test). Not yet seen on a real channel.

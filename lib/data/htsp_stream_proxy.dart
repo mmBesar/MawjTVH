@@ -55,6 +55,12 @@ class HtspStreamProxy {
   /// problem report (what the channel sends, and which kinds are not carried).
   final Map<int, String> streamLayouts = <int, String>{};
 
+  /// The language of each audio and DVB subtitle stream of a channel, in
+  /// stream order. That is the order the player numbers its tracks in, so the
+  /// player can name a track whose language it was not told.
+  final Map<int, List<String>> audioLanguages = <int, List<String>>{};
+  final Map<int, List<String>> subtitleLanguages = <int, List<String>>{};
+
   /// Text subtitle streams of each channel's current subscription.
   final Map<int, List<TextSubtitleStream>> textStreams =
       <int, List<TextSubtitleStream>>{};
@@ -74,6 +80,10 @@ class HtspStreamProxy {
 
   /// What the server listed for [channelId] the last time it was tuned.
   String? streamLayoutFor(int channelId) => streamLayouts[channelId];
+
+  List<String> languagesFor(int channelId, {required bool audio}) =>
+      (audio ? audioLanguages : subtitleLanguages)[channelId] ??
+      const <String>[];
 
   List<TextSubtitleStream> textStreamsFor(int channelId) =>
       textStreams[channelId] ?? const <TextSubtitleStream>[];
@@ -173,6 +183,13 @@ class _RecordingFile {
   Timer? closeTimer;
   final Set<HttpRequest> requests = <HttpRequest>{};
 }
+
+const Set<String> _audioTypes = <String>{
+  'MPEG2AUDIO',
+  'AAC',
+  'AC3',
+  'EAC3',
+};
 
 /// Stream types the transport stream muxer passes on to the player.
 const Set<String> _carriedTypes = <String>{
@@ -606,6 +623,37 @@ class _Feed {
               }
             }
             proxy.streamLayouts[channel] = layout.join(', ');
+            final audioLangs = <String>[];
+            final audioKinds = <int>[];
+            final subLangs = <String>[];
+            for (final item in raw) {
+              if (item is! Map) {
+                continue;
+              }
+              final kind = item['type'];
+              final lang = item['language'];
+              final code = lang is String ? lang : '';
+              if (kind is String && _audioTypes.contains(kind)) {
+                audioLangs.add(code);
+                final audioType = item['audio_type'];
+                audioKinds.add(audioType is int ? audioType : 0);
+              } else if (kind == 'DVBSUB') {
+                subLangs.add(code);
+              }
+            }
+            // Tvheadend turns a language code it does not know (such as the
+            // broadcasters' "org") into "und". An unlabelled plain audio
+            // stream next to labelled ones is the original soundtrack.
+            if (audioLangs.any((l) => l.isNotEmpty && l != 'und')) {
+              for (var i = 0; i < audioLangs.length; i++) {
+                if ((audioLangs[i].isEmpty || audioLangs[i] == 'und') &&
+                    audioKinds[i] == 0) {
+                  audioLangs[i] = 'org';
+                }
+              }
+            }
+            proxy.audioLanguages[channel] = audioLangs;
+            proxy.subtitleLanguages[channel] = subLangs;
             textIndexes.clear();
             final texts = <TextSubtitleStream>[];
             for (final item in raw) {

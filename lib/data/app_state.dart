@@ -319,6 +319,10 @@ class AppState extends ChangeNotifier {
       _htspSession?.textSubtitleStreamsFor(channel.id) ??
       const <TextSubtitleStream>[];
 
+  List<String> serverTrackLanguages(Channel channel, {required bool audio}) =>
+      _htspSession?.trackLanguagesFor(channel.id, audio: audio) ??
+      const <String>[];
+
   String? streamLayoutFor(Channel channel) =>
       _htspSession?.streamLayoutFor(channel.id);
 

@@ -308,6 +308,15 @@ class HtspBackend {
         : _proxy?.textStreamsFor(id) ?? const <TextSubtitleStream>[];
   }
 
+  /// The languages the server gave the audio (or DVB subtitle) streams of
+  /// [channelId], in stream order.
+  List<String> trackLanguagesFor(String channelId, {required bool audio}) {
+    final id = int.tryParse(channelId);
+    return id == null
+        ? const <String>[]
+        : _proxy?.languagesFor(id, audio: audio) ?? const <String>[];
+  }
+
   /// The streams the server listed for [channelId] when it was last tuned.
   String? streamLayoutFor(String channelId) {
     final id = int.tryParse(channelId);

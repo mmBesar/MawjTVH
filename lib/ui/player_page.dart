@@ -1561,6 +1561,8 @@ class _PlayerPageState extends State<PlayerPage> {
         text: _textStreams,
         textSelected: _textSelected,
         onText: _selectText,
+        languageOf: (audio, id, language) =>
+            _langOf(audio: audio, id: id, language: language),
       ),
     );
   }
@@ -1616,7 +1618,11 @@ class _PlayerPageState extends State<PlayerPage> {
         _audioApplied = true;
         final index = pickTrack(
           <({String? language, String? title})>[
-            for (final t in audio) (language: t.language, title: t.title),
+            for (final t in audio)
+              (
+                language: _langOf(audio: true, id: t.id, language: t.language),
+                title: t.title,
+              ),
           ],
           remembered:
               remember ? _appState.rememberedTrack(_channel, audio: true) : null,
@@ -1650,7 +1656,12 @@ class _PlayerPageState extends State<PlayerPage> {
         if (subs.isNotEmpty) {
           final index = pickTrack(
             <({String? language, String? title})>[
-              for (final t in subs) (language: t.language, title: t.title),
+              for (final t in subs)
+                (
+                  language:
+                      _langOf(audio: false, id: t.id, language: t.language),
+                  title: t.title,
+                ),
             ],
             remembered: rememberedSub,
             preferred: settings.preferredSubtitleLang,
@@ -1704,8 +1715,75 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
+  /// The language of an audio or subtitle track. The player is not told a
+  /// stream's language when the server calls it "und", so the server's own
+  /// list (in the order the player numbers its tracks) fills the gap.
+  String? _langOf({
+    required bool audio,
+    required String id,
+    required String? language,
+  }) {
+    if (language != null && language.trim().isNotEmpty) {
+      return language;
+    }
+    if (_isVod) {
+      return language;
+    }
+    final list = _appState.serverTrackLanguages(_channel, audio: audio);
+    final number = int.tryParse(id);
+    if (number == null || number < 1 || number > list.length) {
+      return language;
+    }
+    final served = list[number - 1];
+    return served.isEmpty ? language : served;
+  }
+
+  // media_kit starts libmpv with subtitle drawing switched off (it leaves
+  // text subtitles to its own Flutter view), which also hides the bitmap
+  // subtitles broadcasts use (DVB subtitles). Bitmap tracks therefore need
+  // mpv's drawing switched on; text tracks stay with the Flutter view.
+  String _subVisibility = 'no';
+
+  static const Set<String> _textSubtitleCodecs = <String>{
+    'subrip',
+    'srt',
+    'ass',
+    'ssa',
+    'webvtt',
+    'mov_text',
+    'text',
+    'microdvd',
+    'subviewer',
+    'subviewer1',
+    'sami',
+    'jacosub',
+    'realtext',
+    'vplayer',
+    'mpl2',
+    'pjs',
+    'stl',
+  };
+
+  void _syncSubtitleVisibility(Track track) {
+    final id = track.subtitle.id;
+    var want = 'no';
+    if (_realTrack(id)) {
+      final selected = _player.state.tracks.subtitle
+          .where((t) => t.id == id)
+          .firstOrNull;
+      final codec = (selected?.codec ?? track.subtitle.codec ?? '')
+          .toLowerCase();
+      want = _textSubtitleCodecs.contains(codec) ? 'no' : 'yes';
+    }
+    if (want != _subVisibility) {
+      _subVisibility = want;
+      unawaited(_setMpvProperty('sub-visibility', want));
+    }
+  }
+
   /// A change after the automatic pick is the user's: remember it, show it.
   void _onTrackChanged(Track track) {
+    _syncSubtitleVisibility(track);
     if (!mounted ||
         !_audioApplied ||
         DateTime.now().isBefore(_ignoreTracksUntil)) {
@@ -1723,7 +1801,10 @@ class _PlayerPageState extends State<PlayerPage> {
           _appState.rememberTrack(
             _channel,
             audio: true,
-            key: trackKey(audio.language, audio.title),
+            key: trackKey(
+              _langOf(audio: true, id: audio.id, language: audio.language),
+              audio.title,
+            ),
           );
         }
         final index = tracks.audio.where((t) => _realTrack(t.id)).toList().indexWhere((t) => t.id == audio.id);
@@ -1733,7 +1814,8 @@ class _PlayerPageState extends State<PlayerPage> {
           trackLabel(
             context,
             index: index < 0 ? 0 : index,
-            language: audio.language,
+            language:
+                _langOf(audio: true, id: audio.id, language: audio.language),
             title: audio.title,
             codec: audio.codec,
           ),
@@ -1758,7 +1840,14 @@ class _PlayerPageState extends State<PlayerPage> {
           _appState.rememberTrack(
             _channel,
             audio: false,
-            key: trackKey(subtitle.language, subtitle.title),
+            key: trackKey(
+              _langOf(
+                audio: false,
+                id: subtitle.id,
+                language: subtitle.language,
+              ),
+              subtitle.title,
+            ),
           );
         }
         final index = tracks.subtitle.where((t) => _realTrack(t.id)).toList().indexWhere((t) => t.id == subtitle.id);
@@ -1768,7 +1857,11 @@ class _PlayerPageState extends State<PlayerPage> {
           trackLabel(
             context,
             index: index < 0 ? 0 : index,
-            language: subtitle.language,
+            language: _langOf(
+              audio: false,
+              id: subtitle.id,
+              language: subtitle.language,
+            ),
             title: subtitle.title,
             codec: subtitle.codec,
           ),

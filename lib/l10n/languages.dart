@@ -14,6 +14,29 @@ String languageName(String? code, {required bool arabic}) {
   return arabic ? entry.$2 : entry.$1;
 }
 
+/// Name for a track's language code, including the codes that are not
+/// languages: `org` (original soundtrack), `und` (not labelled), and so on.
+/// Empty when there is nothing to show.
+String trackLanguageName(String? code, {required bool arabic}) {
+  final raw = (code ?? '').trim().toLowerCase();
+  final special = _special[raw] ??
+      (raw.length == 3 && raw.startsWith('q') ? _special['qaa'] : null);
+  if (special != null) {
+    return arabic ? special.$2 : special.$1;
+  }
+  return languageName(code, arabic: arabic);
+}
+
+const Map<String, (String, String)> _special = <String, (String, String)>{
+  'org': ('Original', 'الأصلية'),
+  'qaa': ('Original', 'الأصلية'),
+  'und': ('Unnamed', 'بدون اسم'),
+  'unk': ('Unnamed', 'بدون اسم'),
+  'mul': ('Multiple languages', 'لغات متعددة'),
+  'mis': ('Other', 'أخرى'),
+  'zxx': ('No speech', 'بدون كلام'),
+};
+
 const Map<String, (String, String)> _names = <String, (String, String)>{
   'ara': ('Arabic', 'العربية'),
   'ar': ('Arabic', 'العربية'),
