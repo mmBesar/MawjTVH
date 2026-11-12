@@ -476,7 +476,9 @@ class _Feed {
 
   final HtspStreamProxy proxy;
   final int channel;
-  final TsMuxer _mux = TsMuxer();
+  // The ffmpeg inside media_kit's Android libmpv has no DVB subtitle parser,
+  // which changes what the subtitle packets must look like (see TsMuxer).
+  final TsMuxer _mux = TsMuxer(subtitleHeader: !Platform.isAndroid);
   final List<HttpResponse> _clients = <HttpResponse>[];
 
   bool _running = false;

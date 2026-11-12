@@ -33,6 +33,15 @@ class TsStream {
 /// survive [configure], so the player sees one unbroken stream even when the
 /// subscription behind it is restarted.
 class TsMuxer {
+  /// [subtitleHeader]: put back the data identifier and end marker Tvheadend
+  /// removes from DVB subtitle packets. ffmpeg's DVB subtitle parser needs
+  /// them (it strips them again before decoding). The ffmpeg that media_kit
+  /// ships for Android has the decoder but not that parser, so there the
+  /// decoder gets the packet as it is and expects it to start with a segment.
+  TsMuxer({this.subtitleHeader = true});
+
+  final bool subtitleHeader;
+
   static const int _packet = 188;
   static const int _pmtPid = 0x1000;
   static const int _firstPid = 0x100;
@@ -125,7 +134,7 @@ class TsMuxer {
     var data = payload;
     if (track.video) {
       data = _prepareVideo(track, payload, keyframe);
-    } else if (track.subtitle) {
+    } else if (track.subtitle && subtitleHeader) {
       data = _wrapSubtitle(payload);
     }
     final effectivePts = pts ?? dts;

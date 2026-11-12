@@ -101,6 +101,7 @@ Mawjac (his IPTV player). Not an IPTV player: it brings no channels.
 - 0.1.29: recordings/channels survive a dropped HTSP session.
 - 0.1.30: stream list and subtitle tracks in the problem report.
 - 0.1.31: teletext (TEXTSUB) subtitles drawn by the app.
+- 0.1.34: Android libmpv (media-kit/libmpv-android-video-build, default flavor) has the dvbsub decoder but no dvbsub parser, so on Android the muxer sends DVBSUB packets without the 0x20 0x00 header and 0xFF end marker (`TsMuxer(subtitleHeader: !Platform.isAndroid)`). Unverified.
 - 0.1.33: media_kit sets `sub-visibility=no` (libass off), so bitmap subtitles were never drawn: the player now sets it per selected track codec; track names for org/und/etc.; server languages fill in for streams the player has no language for.
 - 0.1.32: DVBSUB fix (Tvheadend strips 0x20 0x00 and the 0xFF end marker from the packet; the muxer restores them); audio/subtitle menu ticks and first-change memory fixed.
 - 2026-11-11: AI-assistance disclosure added to the README; `AGENTS.md` and

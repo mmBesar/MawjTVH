@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.34
+
+- Android: DVB subtitles. Desktop showed them since 0.1.33, Android did not. The ffmpeg that media_kit ships for Android is built with the DVB subtitle decoder but without the DVB subtitle parser (`--enable-decoder=dvbsub`, no `--enable-parser=dvbsub` in its build script). The parser is what strips the two header bytes and the end marker that 0.1.32 puts back for desktop, so on Android the decoder received a packet starting with 0x20 and rejected it. On Android the muxer now sends the packet as Tvheadend gives it, starting with a segment.
+- Not verified on a device: this follows from the build scripts and my reading of ffmpeg's decoder, not from running it. If Android still shows nothing, send the diagnostics and the log of `adb logcat | grep -i dvb` if you can.
+
 ## 0.1.33
 
 - Fixed, for real this time: DVB subtitles stayed invisible. The stream data was right after 0.1.32, but the video library (media_kit) starts libmpv with subtitle drawing switched off, because it draws text subtitles in its own view and that view cannot draw bitmap subtitles. The player now switches mpv's drawing on while a bitmap subtitle track (DVB) is selected and leaves text subtitles to the old view.
