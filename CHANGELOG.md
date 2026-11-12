@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.35
+
+- Android: new volume and brightness gauge. A tall pill on the edge you are swiping (brightness on the left, volume on the right), in the accent colour, filling from the bottom as you drag, with an icon that follows the level (low/medium/high brightness, mute/down/up volume) and the percentage underneath. It sits at the edge so your thumb does not cover it. Desktop keeps its segmented bar.
+- Not seen on a device; layout is by reading, so tell me if it needs a different size or position.
+
 ## 0.1.34
 
 - Android: DVB subtitles. Desktop showed them since 0.1.33, Android did not. The ffmpeg that media_kit ships for Android is built with the DVB subtitle decoder but without the DVB subtitle parser (`--enable-decoder=dvbsub`, no `--enable-parser=dvbsub` in its build script). The parser is what strips the two header bytes and the end marker that 0.1.32 puts back for desktop, so on Android the decoder received a packet starting with 0x20 and rejected it. On Android the muxer now sends the packet as Tvheadend gives it, starting with a segment.
