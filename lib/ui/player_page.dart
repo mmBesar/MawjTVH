@@ -3796,127 +3796,15 @@ class _GestureOsd extends StatelessWidget {
         subtitle: subtitle,
       );
     }
-    if (kIsDesktop) {
-      return StbValueOsd(
-        icon: brightness
-            ? Icons.brightness_6_rounded
-            : (percent == 0
-                ? Icons.volume_off_rounded
-                : Icons.volume_up_rounded),
-        label: brightness ? strings.brightness : strings.volume,
-        value: value,
-      );
-    }
-    return _SideGaugeOsd(
-      brightness: brightness,
-      value: value,
+    // The same panel on every platform.
+    return StbValueOsd(
+      icon: brightness
+          ? Icons.brightness_6_rounded
+          : (percent == 0
+              ? Icons.volume_off_rounded
+              : Icons.volume_up_rounded),
       label: brightness ? strings.brightness : strings.volume,
-    );
-  }
-}
-
-/// The phone's volume and brightness gauge: a tall pill at the edge the swipe
-/// is on (brightness left, volume right), with the level filling it from the
-/// bottom, so the thumb never covers it.
-class _SideGaugeOsd extends StatelessWidget {
-  const _SideGaugeOsd({
-    required this.brightness,
-    required this.value,
-    required this.label,
-  });
-
-  final bool brightness;
-  final double value;
-  final String label;
-
-  IconData get _icon {
-    if (brightness) {
-      if (value < 0.34) {
-        return Icons.brightness_low_rounded;
-      }
-      return value < 0.67
-          ? Icons.brightness_medium_rounded
-          : Icons.brightness_high_rounded;
-    }
-    if (value <= 0) {
-      return Icons.volume_off_rounded;
-    }
-    return value < 0.5
-        ? Icons.volume_down_rounded
-        : Icons.volume_up_rounded;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = context.mawjColors.accent;
-    final level = value.clamp(0.0, 1.0).toDouble();
-    final percent = (level * 100).round();
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final height = (constraints.maxHeight * 0.42).clamp(160.0, 250.0);
-        return Align(
-          alignment:
-              brightness ? Alignment.centerLeft : Alignment.centerRight,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 26),
-            child: Semantics(
-              label: '$label $percent%',
-              child: Container(
-                width: 60,
-                height: height.toDouble(),
-                padding: const EdgeInsets.fromLTRB(0, 14, 0, 12),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.14),
-                  ),
-                ),
-                child: Column(
-                  children: <Widget>[
-                    Icon(_icon, color: accent, size: 24),
-                    const SizedBox(height: 10),
-                    Expanded(
-                      child: Container(
-                        width: 10,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        alignment: Alignment.bottomCenter,
-                        child: TweenAnimationBuilder<double>(
-                          tween: Tween<double>(end: level),
-                          duration: const Duration(milliseconds: 90),
-                          builder: (context, animated, _) {
-                            return FractionallySizedBox(
-                              heightFactor: animated.clamp(0.0, 1.0),
-                              widthFactor: 1,
-                              child: ColoredBox(color: accent),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      '$percent',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        fontFeatures: <FontFeature>[
-                          FontFeature.tabularFigures(),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
+      value: value,
     );
   }
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.36
+
+- Android: the volume and brightness indicator is now the same panel as on desktop (icon, label, big percentage and the segmented bar), replacing the side pill from 0.1.35.
+
 ## 0.1.35
 
 - Android: new volume and brightness gauge. A tall pill on the edge you are swiping (brightness on the left, volume on the right), in the accent colour, filling from the bottom as you drag, with an icon that follows the level (low/medium/high brightness, mute/down/up volume) and the percentage underneath. It sits at the edge so your thumb does not cover it. Desktop keeps its segmented bar.
