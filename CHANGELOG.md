@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.37
+
+- New **TV** and **Radio** tabs. Radio stations (found by the server's service type or a "Radio" tag, as before) no longer share the Watch page behind All/TV/Radio chips; the tabs are now TV, Radio, Guide, Recordings, Settings. TV, the Guide and channel switching in the video player show TV only.
+- Radio plays as **audio**, not video. One app-wide audio player (no video surface, `vid=no`) outlives every page: a mini player bar slides in above the navigation with the station, what is on, play/pause and stop; tapping it (or swiping it up) opens a Now Playing page with a large logo, moving equaliser bars, the programme and its progress, previous/next station, volume, a sleep timer and a link to the station's guide; swiping the mini bar down stops the radio. Opening a radio station from search, the guide or a programme sheet also goes to the radio player. Starting a TV channel stops the radio.
+- Pausing a station lets go of the stream (a live station has nothing to come back to); play tunes in again at the live point. A dropped stream is retried with a growing pause (2, 4, 8 ... 30 s, eight tries) before an error is shown.
+- Android: background playback. A foreground media service keeps the radio playing with the screen off or another app in front, with a media notification (previous, play/pause, next, stop), lock-screen and headset-button control, audio focus (calls and other players pause it), pause when headphones are unplugged, and a wake lock and Wi-Fi lock while playing. Android 13+ asks once for the notification permission; without it the audio still plays.
+- The Favourites tab is gone: favourites are a filter pill in TV and in Radio (the TV page's "Resume" and recents strip stays).
+- Not verified on a device: nothing here has been compiled or run yet; CI is the first compiler. Known limits: the equaliser bars are decorative (libmpv exposes no level meter to the app); closing the app from the recents list ends the radio, because the player lives inside the app, not in the service; Linux has no media-key/MPRIS integration yet.
+
 ## 0.1.36
 
 - Android: the volume and brightness indicator is now the same panel as on desktop (icon, label, big percentage and the segmented bar), replacing the side pill from 0.1.35.

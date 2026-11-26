@@ -26,6 +26,7 @@ PERMISSIONS = (
     "android.permission.WAKE_LOCK",
     "android.permission.FOREGROUND_SERVICE",
     "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+    "android.permission.POST_NOTIFICATIONS",
 )
 
 DESKTOP_FILE = """[Desktop Entry]
@@ -98,6 +99,17 @@ def patch_android_manifest() -> None:
             raise SystemExit("Could not find </application>")
         text = text.replace("</application>", service + "  </application>", 1)
 
+    if ".RadioService" not in text:
+        service = (
+            '    <service\n'
+            '        android:name=".RadioService"\n'
+            '        android:exported="false"\n'
+            '        android:foregroundServiceType="mediaPlayback" />\n'
+        )
+        if "</application>" not in text:
+            raise SystemExit("Could not find </application>")
+        text = text.replace("</application>", service + "  </application>", 1)
+
     text = re.sub(
         r'android:label="[^"]*"',
         f'android:label="{APP_LABEL}"',
@@ -113,6 +125,7 @@ MAIN_ACTIVITY = """package com.mmbesar.mawjtvh
 import android.app.PictureInPictureParams
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.util.Rational
@@ -124,9 +137,11 @@ import io.flutter.plugin.common.MethodChannel
 // Picture-in-picture for the player: Dart asks to float the video, and
 // (optionally) the window floats by itself when the user leaves the app.
 // It also hands a stream to an external player (mpv, VLC) and returns where
-// that player stopped.
+// that player stopped, and drives the radio's media session (RadioService).
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
+    private var mediaChannel: MethodChannel? = null
+    private var askedNotifications = false
     private var autoEnter = false
     private var playerResult: MethodChannel.Result? = null
     private val playerRequest = 4711
@@ -145,6 +160,22 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        val media = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mawjtvh/media")
+        mediaChannel = media
+        RadioService.listener = { action -> media.invokeMethod("action", action) }
+        media.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "update" -> {
+                    mediaUpdate(call)
+                    result.success(null)
+                }
+                "stop" -> {
+                    stopService(Intent(this, RadioService::class.java))
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mawjtvh/external_player")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -152,6 +183,60 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    // Android 13+ hides notifications until the user allows them. The radio
+    // plays either way; the question is asked once, when it first starts.
+    private fun askForNotifications() {
+        if (askedNotifications || Build.VERSION.SDK_INT < 33) {
+            return
+        }
+        askedNotifications = true
+        if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 4713)
+        }
+    }
+
+    private fun mediaUpdate(call: MethodCall) {
+        askForNotifications()
+        val title = call.argument<String>("title") ?: ""
+        val subtitle = call.argument<String>("subtitle") ?: ""
+        val playing = call.argument<Boolean>("playing") ?: false
+        val canSkip = call.argument<Boolean>("canSkip") ?: false
+        val running = RadioService.instance
+        if (running != null) {
+            running.applyState(title, subtitle, playing, canSkip)
+            return
+        }
+        val intent = Intent(this, RadioService::class.java).apply {
+            action = RadioService.ACTION_UPDATE
+            putExtra("title", title)
+            putExtra("subtitle", subtitle)
+            putExtra("playing", playing)
+            putExtra("canSkip", canSkip)
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        } catch (e: Exception) {
+            // Audio still plays; only the notification and the background
+            // protection are missing.
+        }
+    }
+
+    // The Flutter engine (and with it the radio player) goes with the
+    // activity, so the media service must not outlive it.
+    override fun onDestroy() {
+        if (isFinishing) {
+            RadioService.listener = null
+            stopService(Intent(this, RadioService::class.java))
+        }
+        super.onDestroy()
     }
 
     private fun playExternal(call: MethodCall, result: MethodChannel.Result) {
@@ -309,6 +394,342 @@ class KeepAliveService : Service() {
 """
 
 
+RADIO_SERVICE = """package com.mmbesar.mawjtvh
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.ServiceInfo
+import android.graphics.drawable.Icon
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.media.MediaMetadata
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
+import android.net.wifi.WifiManager
+import android.os.Build
+import android.os.IBinder
+import android.os.PowerManager
+
+// The radio as an Android media player: a foreground service that keeps the
+// app (and the audio) alive with the screen off or another app in front,
+// shows the media notification, answers the lock screen and headset buttons,
+// and respects audio focus (calls, other players) and unplugged headphones.
+// The audio itself is decoded by the Dart side; this only holds the session.
+class RadioService : Service() {
+    companion object {
+        const val ACTION_UPDATE = "mawjtvh.radio.update"
+        private const val ACTION_PREFIX = "mawjtvh.radio.do."
+        private const val CHANNEL_ID = "radio"
+        private const val NOTIFICATION_ID = 4713
+
+        @Volatile
+        var instance: RadioService? = null
+
+        // Set by MainActivity: sends a button press to Dart.
+        var listener: ((String) -> Unit)? = null
+    }
+
+    private var session: MediaSession? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
+    private var focusRequest: AudioFocusRequest? = null
+    private var hasFocus = false
+    private var pausedByFocus = false
+    private var foreground = false
+    private var title = ""
+    private var subtitle = ""
+    private var playing = false
+    private var canSkip = false
+
+    private val noisy = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (playing) emit("pause")
+        }
+    }
+
+    private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        when (change) {
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                pausedByFocus = false
+                hasFocus = false
+                emit("pause")
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                pausedByFocus = playing
+                hasFocus = false
+                emit("pause")
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                hasFocus = true
+                if (pausedByFocus) {
+                    pausedByFocus = false
+                    emit("play")
+                }
+            }
+            else -> {}
+        }
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    @Suppress("DEPRECATION")
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, "Radio", NotificationManager.IMPORTANCE_LOW)
+            )
+        }
+        val created = MediaSession(this, "MawjTVH radio")
+        created.setFlags(
+            MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
+        )
+        created.setCallback(object : MediaSession.Callback() {
+            override fun onPlay() = emit("play")
+            override fun onPause() = emit("pause")
+            override fun onStop() = emit("stop")
+            override fun onSkipToNext() = emit("next")
+            override fun onSkipToPrevious() = emit("previous")
+        })
+        created.isActive = true
+        session = created
+        registerReceiver(noisy, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val action = intent?.action
+        if (intent != null && action == ACTION_UPDATE) {
+            applyState(
+                intent.getStringExtra("title") ?: "",
+                intent.getStringExtra("subtitle") ?: "",
+                intent.getBooleanExtra("playing", false),
+                intent.getBooleanExtra("canSkip", false)
+            )
+        } else if (action != null && action.startsWith(ACTION_PREFIX)) {
+            emit(action.removePrefix(ACTION_PREFIX))
+        } else if (!foreground) {
+            // Started without a state (should not happen): stay legal.
+            startForegroundCompat(buildNotification())
+        }
+        return START_NOT_STICKY
+    }
+
+    fun applyState(newTitle: String, newSubtitle: String, nowPlaying: Boolean, skip: Boolean) {
+        title = newTitle
+        subtitle = newSubtitle
+        playing = nowPlaying
+        canSkip = skip
+        updateSession()
+        val notification = buildNotification()
+        if (!foreground) {
+            startForegroundCompat(notification)
+        } else {
+            val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            manager.notify(NOTIFICATION_ID, notification)
+        }
+        if (playing) {
+            acquireLocks()
+            requestFocus()
+        } else {
+            releaseLocks()
+            abandonFocus()
+        }
+    }
+
+    private fun startForegroundCompat(notification: Notification) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            foreground = true
+        } catch (e: Exception) {
+            // Android refused a foreground start from the background; the
+            // audio keeps playing for as long as the system allows.
+        }
+    }
+
+    private fun emit(action: String) {
+        listener?.invoke(action)
+    }
+
+    private fun updateSession() {
+        val current = session ?: return
+        current.setMetadata(
+            MediaMetadata.Builder()
+                .putString(MediaMetadata.METADATA_KEY_TITLE, title)
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, subtitle)
+                .build()
+        )
+        var actions = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or
+            PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_STOP
+        if (canSkip) {
+            actions = actions or PlaybackState.ACTION_SKIP_TO_NEXT or
+                PlaybackState.ACTION_SKIP_TO_PREVIOUS
+        }
+        current.setPlaybackState(
+            PlaybackState.Builder()
+                .setActions(actions)
+                .setState(
+                    if (playing) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED,
+                    PlaybackState.PLAYBACK_POSITION_UNKNOWN,
+                    1f
+                )
+                .build()
+        )
+    }
+
+    private fun command(name: String, code: Int): PendingIntent {
+        val intent = Intent(this, RadioService::class.java).setAction(ACTION_PREFIX + name)
+        return PendingIntent.getService(
+            this, code, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+    }
+
+    private fun action(icon: Int, label: String, name: String, code: Int): Notification.Action {
+        return Notification.Action.Builder(
+            Icon.createWithResource(this, icon), label, command(name, code)
+        ).build()
+    }
+
+    private fun buildNotification(): Notification {
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, CHANNEL_ID)
+        } else {
+            Notification.Builder(this)
+        }
+        var compact = 0
+        var index = 0
+        if (canSkip) {
+            builder.addAction(action(android.R.drawable.ic_media_previous, "Previous", "previous", 1))
+            index++
+        }
+        builder.addAction(
+            if (playing) action(android.R.drawable.ic_media_pause, "Pause", "pause", 2)
+            else action(android.R.drawable.ic_media_play, "Play", "play", 3)
+        )
+        compact = index
+        index++
+        if (canSkip) {
+            builder.addAction(action(android.R.drawable.ic_media_next, "Next", "next", 4))
+            index++
+        }
+        builder.addAction(action(android.R.drawable.ic_menu_close_clear_cancel, "Stop", "stop", 5))
+
+        val open = packageManager.getLaunchIntentForPackage(packageName)
+        if (open != null) {
+            builder.setContentIntent(
+                PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE)
+            )
+        }
+        val style = Notification.MediaStyle()
+        val token = session?.sessionToken
+        if (token != null) {
+            style.setMediaSession(token)
+        }
+        style.setShowActionsInCompactView(compact)
+        return builder
+            .setContentTitle(if (title.isEmpty()) "MawjTVH" else title)
+            .setContentText(subtitle)
+            .setSmallIcon(applicationInfo.icon)
+            .setOngoing(playing)
+            .setShowWhen(false)
+            .setDeleteIntent(command("stop", 6))
+            .setStyle(style)
+            .build()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun acquireLocks() {
+        if (wakeLock == null) {
+            val power = getSystemService(POWER_SERVICE) as PowerManager
+            wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "mawjtvh:radio").apply {
+                setReferenceCounted(false)
+            }
+        }
+        if (wakeLock?.isHeld == false) wakeLock?.acquire()
+        if (wifiLock == null) {
+            val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+            wifiLock = wifi.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "mawjtvh:radio")
+                .apply { setReferenceCounted(false) }
+        }
+        if (wifiLock?.isHeld == false) wifiLock?.acquire()
+    }
+
+    private fun releaseLocks() {
+        if (wakeLock?.isHeld == true) wakeLock?.release()
+        if (wifiLock?.isHeld == true) wifiLock?.release()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun requestFocus() {
+        if (hasFocus) return
+        val audio = getSystemService(AUDIO_SERVICE) as AudioManager
+        val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val request = focusRequest ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                .setOnAudioFocusChangeListener(focusListener)
+                .build()
+            focusRequest = request
+            audio.requestAudioFocus(request)
+        } else {
+            audio.requestAudioFocus(
+                focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN
+            )
+        }
+        hasFocus = granted == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    }
+
+    @Suppress("DEPRECATION")
+    private fun abandonFocus() {
+        if (!hasFocus) return
+        val audio = getSystemService(AUDIO_SERVICE) as AudioManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            focusRequest?.let { audio.abandonAudioFocusRequest(it) }
+        } else {
+            audio.abandonAudioFocus(focusListener)
+        }
+        hasFocus = false
+    }
+
+    override fun onDestroy() {
+        releaseLocks()
+        abandonFocus()
+        try {
+            unregisterReceiver(noisy)
+        } catch (e: Exception) {
+            // Already gone.
+        }
+        session?.isActive = false
+        session?.release()
+        session = null
+        if (instance === this) instance = null
+        super.onDestroy()
+    }
+}
+"""
+
+
 def patch_android_activity() -> None:
     kotlin = ANDROID / "app" / "src" / "main" / "kotlin" / "com" / "mmbesar" / "mawjtvh"
     if not (ANDROID / "app" / "src" / "main").is_dir():
@@ -319,7 +740,8 @@ def patch_android_activity() -> None:
         return
     write(target, MAIN_ACTIVITY)
     write(kotlin / "KeepAliveService.kt", KEEP_ALIVE_SERVICE)
-    print("  wrote MainActivity.kt (picture-in-picture, external player)")
+    write(kotlin / "RadioService.kt", RADIO_SERVICE)
+    print("  wrote MainActivity.kt (picture-in-picture, external player, radio)")
 
 
 SIGNING_HEADER = """import java.io.FileInputStream

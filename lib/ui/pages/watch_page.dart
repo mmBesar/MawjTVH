@@ -19,7 +19,6 @@ import '../widgets/channel_tile.dart';
 import '../widgets/channel_views.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_banner.dart';
-import '../widgets/media_filter.dart';
 import '../widgets/source_switcher.dart';
 import '../widgets/warnings_panel.dart';
 import '../widgets/wave.dart';
@@ -54,20 +53,22 @@ class _WatchPageState extends State<WatchPage> {
       }
     }
 
-    state.recents.take(2).forEach(add);
-    state.favorites.forEach(add);
-    for (final channel in state.channels) {
+    // Radio stations have their own tab.
+    final tv = state.tvChannels;
+    state.recents.where((c) => !c.isRadio).take(2).forEach(add);
+    state.tvFavorites.forEach(add);
+    for (final channel in tv) {
       if (state.epg.nowFor(channel, state.now) != null) {
         add(channel);
       }
     }
-    state.channels.forEach(add);
+    tv.forEach(add);
     return result;
   }
 
   List<Channel> _visible(AppState state) {
     if (_filter == _favorites) {
-      return state.favorites;
+      return state.tvFavorites;
     }
     return state.filteredChannels;
   }
@@ -86,7 +87,8 @@ class _WatchPageState extends State<WatchPage> {
     }
 
     // The group is shared with the Guide; favourites stay local to Watch.
-    if (_favoritesActive && state.favorites.isEmpty) {
+    final hasTvFavorites = state.tvFavorites.isNotEmpty;
+    if (_favoritesActive && !hasTvFavorites) {
       _favoritesActive = false;
     }
     _filter = _favoritesActive ? _favorites : (state.groupFilter ?? _all);
@@ -153,13 +155,7 @@ class _WatchPageState extends State<WatchPage> {
                             .toDouble(),
                   ),
                 ),
-              if (state.hasRadio)
-                SliverToBoxAdapter(
-                  child: MediaFilterChips(
-                    padding: EdgeInsets.fromLTRB(sidePadding, 4, sidePadding, 0),
-                  ),
-                ),
-              if (state.groups.isNotEmpty || state.favorites.isNotEmpty)
+              if (state.groups.isNotEmpty || hasTvFavorites)
                 SliverToBoxAdapter(
                   child: _FilterBar(
                     padding: sidePadding,
@@ -167,7 +163,7 @@ class _WatchPageState extends State<WatchPage> {
                     allKey: _all,
                     favoritesKey: _favorites,
                     groups: state.groups,
-                    hasFavorites: state.favorites.isNotEmpty,
+                    hasFavorites: hasTvFavorites,
                     onSelected: (value) {
                       setState(() => _favoritesActive = value == _favorites);
                       if (value != _favorites) {

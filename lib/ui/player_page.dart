@@ -46,6 +46,14 @@ import 'widgets/wave.dart';
 Future<void> openPlayer(BuildContext context, Channel channel) async {
   final state = context.read<AppState>();
   final navigator = Navigator.of(context);
+  if (channel.isRadio && !isSyntheticChannel(channel)) {
+    // Radio is audio: it plays in the app-wide radio player (mini player,
+    // notification), never in the video player.
+    unawaited(state.radio.play(channel));
+    return;
+  }
+  // Two things are never on at once.
+  unawaited(state.radio.stop());
   if (Platform.isAndroid) {
     final app = ExternalPlayerApp.byId(state.settings.androidPlayer);
     if (app != null && await _openExternal(context, state, channel, app)) {
@@ -780,11 +788,11 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   List<Channel> _zapList(AppState state) {
-    final favorites = state.favorites;
+    final favorites = state.tvFavorites;
     if (favorites.length > 1 && favorites.any((c) => c.id == _channel.id)) {
       return favorites;
     }
-    return state.channels;
+    return state.tvChannels;
   }
 
   void _zap(int delta) {
@@ -1586,7 +1594,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (number.isEmpty || !mounted) {
       return;
     }
-    final target = _appState.channels
+    final target = _appState.tvChannels
         .where((channel) => channel.number == number)
         .toList();
     if (target.isEmpty) {
@@ -2389,8 +2397,8 @@ class _PlayerPageState extends State<PlayerPage> {
         children: <Widget>[
           if (_browserOpen)
             StbChannelBrowser(
-              channels: state.channels,
-              favorites: state.favorites,
+              channels: state.tvChannels,
+              favorites: state.tvFavorites,
               groups: state.groups,
               initialGroup: state.groupFilter,
               current: _channel,

@@ -15,7 +15,6 @@ import '../../l10n/tvh_strings.dart';
 import '../player_page.dart';
 import '../widgets/channel_logo.dart';
 import '../widgets/empty_state.dart';
-import '../widgets/media_filter.dart';
 import '../widgets/programme_sheet.dart';
 import '../widgets/warnings_panel.dart';
 import '../widgets/wheel_scroll.dart';
@@ -230,8 +229,9 @@ class _GuidePageState extends State<GuidePage> {
       _scrolledToNow = false;
     }
 
-    final channels = _favoritesOnly && state.favorites.isNotEmpty
-        ? state.favorites
+    final tvFavorites = state.tvFavorites;
+    final channels = _favoritesOnly && tvFavorites.isNotEmpty
+        ? tvFavorites
         : state.filteredChannels;
     final windowEnd = _windowStart.add(Duration(minutes: _spanMinutes));
     final use24 = state.settings.use24HourTime;
@@ -365,9 +365,6 @@ class _GuidePageState extends State<GuidePage> {
                 );
               }),
             ),
-          const MediaFilterChips(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-          ),
           if (state.groups.isNotEmpty)
             SizedBox(
               height: 44,

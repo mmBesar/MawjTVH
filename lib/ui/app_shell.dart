@@ -11,13 +11,14 @@ import '../core/ui_zoom.dart';
 import '../data/app_state.dart';
 import '../l10n/strings.dart';
 import '../l10n/tvh_strings.dart';
-import 'pages/favorites_page.dart';
 import 'pages/guide_page.dart';
+import 'pages/radio_page.dart';
 import 'pages/recordings_page.dart';
 import 'pages/search_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/sources_page.dart';
 import 'pages/watch_page.dart';
+import 'widgets/radio_mini_player.dart';
 import 'widgets/source_switcher.dart';
 
 class AppShell extends StatefulWidget {
@@ -152,8 +153,8 @@ class _AppShellState extends State<AppShell> {
       return true;
     }
     if (key == LogicalKeyboardKey.keyF || key == LogicalKeyboardKey.keyK) {
-      // Search belongs to the page you are on: channels from Watch and
-      // Favorites, the guide from the Guide.
+      // Search belongs to the page you are on: channels from TV and
+      // Radio, the guide from the Guide.
       if (_index <= 1) {
         unawaited(SearchPage.open(context, SearchScope.channels));
       } else if (_index == 2) {
@@ -186,7 +187,7 @@ class _AppShellState extends State<AppShell> {
 
     final pages = <Widget>[
       WatchPage(onOpenSources: _openSources),
-      const FavoritesPage(),
+      RadioPage(onOpenSources: _openSources),
       GuidePage(
         onOpenSources: _openSources,
         onEdgeDrag: kIsDesktop ? null : _edgeDrag,
@@ -196,15 +197,15 @@ class _AppShellState extends State<AppShell> {
       SettingsPage(onOpenSources: _openSources),
     ];
     final labels = <String>[
-      strings.watch,
-      strings.favorites,
+      strings.tvKind,
+      strings.radioKind,
       strings.guide,
       strings.recordings,
       strings.settings,
     ];
     const icons = <IconData>[
       Icons.live_tv_rounded,
-      Icons.star_rounded,
+      Icons.radio_rounded,
       Icons.calendar_month_rounded,
       Icons.fiber_manual_record_rounded,
       Icons.tune_rounded,
@@ -275,7 +276,20 @@ class _AppShellState extends State<AppShell> {
                     ),
                   ),
                 ),
-                Expanded(child: content),
+                Expanded(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      content,
+                      const Positioned(
+                        left: 16,
+                        right: 16,
+                        bottom: 16,
+                        child: Center(child: RadioMiniPlayer()),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           );
@@ -285,6 +299,13 @@ class _AppShellState extends State<AppShell> {
           body: Stack(
             children: <Widget>[
               Positioned.fill(child: content),
+              Positioned(
+                left: 12,
+                right: 12,
+                // Just above the floating navigation pill (48 + 12 padding).
+                bottom: MediaQuery.viewPaddingOf(context).bottom + 14 + 60 + 8,
+                child: const Center(child: RadioMiniPlayer()),
+              ),
               Positioned(
                 left: 0,
                 right: 0,

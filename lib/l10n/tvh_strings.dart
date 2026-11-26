@@ -360,6 +360,26 @@ extension TvhStrings on AppStrings {
   String get allKinds => isArabic ? 'الكل' : 'All';
   String get tvKind => isArabic ? 'تلفزيون' : 'TV';
   String get radioKind => isArabic ? 'راديو' : 'Radio';
+  String get noRadio =>
+      isArabic ? 'لا توجد محطات راديو' : 'No radio stations';
+  String get noRadioBody => isArabic
+      ? 'لم يجد الخادم محطات راديو. تُعرَف المحطة من نوع خدمتها أو من وسم يحوي «Radio».'
+      : 'The server has no radio stations. A station is recognised by its service type or a tag containing "Radio".';
+  String get radioNowPlaying => isArabic ? 'قيد التشغيل' : 'Now playing';
+  String get radioConnecting => isArabic ? 'جارٍ الاتصال…' : 'Connecting…';
+  String get radioPaused => isArabic ? 'متوقف مؤقتًا' : 'Paused';
+  String radioFailed(String why) =>
+      isArabic ? 'تعذّر التشغيل: $why' : 'Could not play: $why';
+  String get sleepTimer => isArabic ? 'مؤقّت النوم' : 'Sleep timer';
+  String get sleepTimerOff => isArabic ? 'إيقاف المؤقّت' : 'Timer off';
+  String sleepInMinutes(int minutes) =>
+      isArabic ? 'بعد $minutes دقيقة' : 'In $minutes minutes';
+  String sleepAtTime(String time) =>
+      isArabic ? 'يتوقف الساعة $time' : 'Stops at $time';
+  String get previousStation => isArabic ? 'المحطة السابقة' : 'Previous station';
+  String get nextStation => isArabic ? 'المحطة التالية' : 'Next station';
+  String get stopRadio => isArabic ? 'إيقاف الراديو' : 'Stop radio';
+  String get minimise => isArabic ? 'تصغير' : 'Minimise';
   String get abortRecording => isArabic ? 'إجهاض التسجيل' : 'Abort recording';
   String recordCurrentProgramme(String title) => isArabic
       ? 'تسجيل البرنامج الحالي: $title'

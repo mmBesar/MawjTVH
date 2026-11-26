@@ -11,6 +11,7 @@ import 'legacy_cleanup.dart';
 import 'htsp_backend.dart';
 import 'htsp_connection.dart';
 import 'models.dart';
+import 'radio_player.dart';
 import 'storage.dart';
 import 'text_subtitles.dart';
 import 'tvh_client.dart';
@@ -44,6 +45,17 @@ class AppState extends ChangeNotifier {
   final StorageService _storage;
   final TvhLoader _loader;
   Timer? _ticker;
+
+  /// The radio: one audio player for the whole app, so a station keeps
+  /// playing while pages come and go (see [RadioPlayer]).
+  late final RadioPlayer radio = RadioPlayer(
+    prepare: prepareStream,
+    release: releaseStream,
+    watched: (channel) => unawaited(markWatched(channel)),
+    stations: () => radioChannels,
+    allowInsecure: () => activeSource?.allowInsecureCerts ?? false,
+    nowOn: (channel) => epg.nowFor(channel, DateTime.now())?.title,
+  );
   int _loadGeneration = 0;
 
   late AppSettings _settings;
@@ -120,38 +132,35 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  MediaFilter _media = MediaFilter.all;
-
-  MediaFilter get mediaFilter => hasRadio ? _media : MediaFilter.all;
-
   /// True when the server has radio stations.
   bool get hasRadio => channels.any((channel) => channel.isRadio);
 
-  void setMediaFilter(MediaFilter value) {
-    if (_media == value) {
-      return;
-    }
-    _media = value;
-    notifyListeners();
-  }
+  /// Every radio station, in channel order. They live on the Radio tab and
+  /// play through [radio], never through the video player.
+  List<Channel> get radioChannels => channels
+      .where((channel) => channel.isRadio)
+      .toList(growable: false);
 
-  /// The channels of the chosen group and kind (everything when none is
-  /// chosen).
+  /// Every TV channel (no radio), in channel order; what the video player's
+  /// channel switching and browser cycle through.
+  List<Channel> get tvChannels => channels
+      .where((channel) => !channel.isRadio)
+      .toList(growable: false);
+
+  /// The favourites that are TV channels.
+  List<Channel> get tvFavorites => favorites
+      .where((channel) => !channel.isRadio)
+      .toList(growable: false);
+
+  /// The TV channels of the chosen group (every TV channel when no group is
+  /// chosen). Radio stations are not part of it.
   List<Channel> get filteredChannels {
     final group = groupFilter;
-    final media = mediaFilter;
-    if (group == null && media == MediaFilter.all) {
-      return channels;
-    }
     return channels.where((channel) {
-      if (group != null && channel.group != group) {
+      if (channel.isRadio) {
         return false;
       }
-      return switch (media) {
-        MediaFilter.all => true,
-        MediaFilter.tv => !channel.isRadio,
-        MediaFilter.radio => channel.isRadio,
-      };
+      return group == null || channel.group == group;
     }).toList(growable: false);
   }
 
@@ -188,6 +197,7 @@ class AppState extends ChangeNotifier {
     _ticker = Timer.periodic(const Duration(seconds: 30), (_) {
       _now = DateTime.now();
       notifyListeners();
+      radio.refreshNowOn();
       _maybeAutoRefresh();
       // Keep the "recording now" dots honest without hammering the server.
       if (++_tick % 2 == 0 && _content != null) {
@@ -1105,6 +1115,7 @@ class AppState extends ChangeNotifier {
     _ticker?.cancel();
     _detachHtsp();
     unawaited(_textLines.close());
+    radio.dispose();
     super.dispose();
   }
 }

@@ -53,6 +53,7 @@ account on.
   new/repeat/HD badges from the server's EPG.
 - **Recordings.** Upcoming, finished and failed; record a programme, a series,
   or "record now" from the player. Play them over HTSP too, with seeking.
+- **Radio.** Radio stations have their own tab and play as audio, not video: a mini player, a Now Playing page, sleep timer, and on Android background and screen-off playback with a media notification.
 - **Channel views.** Cards, list, compact and a logo wall; favourites, recents
   and Tvheadend tags, remembered between runs.
 - **Interface size** for the whole app and for the guide, so it reads well on

@@ -97,9 +97,6 @@ class SourceConfig {
   }
 }
 
-/// Which kind of channel Watch and Guide show.
-enum MediaFilter { all, tv, radio }
-
 class Channel {
   const Channel({
     required this.id,

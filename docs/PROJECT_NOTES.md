@@ -78,8 +78,8 @@ Mawjac (his IPTV player). Not an IPTV player: it brings no channels.
   stale after midnight; in-app Linux playback has baseline frame drops with
   nvdec-copy.
 - Roadmap (frozen while testing): recently watched strip, timeshift (design
-  talk first: buffer length and location), Android TV remote/D-pad, teletext,
-  merge the Favourites page into the tag row.
+  talk first: buffer length and location), Android TV remote/D-pad, teletext.
+  (The Favourites page was merged into the filter pills in 0.1.37.)
 
 ## Status log
 
@@ -101,6 +101,7 @@ Mawjac (his IPTV player). Not an IPTV player: it brings no channels.
 - 0.1.29: recordings/channels survive a dropped HTSP session.
 - 0.1.30: stream list and subtitle tracks in the problem report.
 - 0.1.31: teletext (TEXTSUB) subtitles drawn by the app.
+- 0.1.37: TV and Radio tabs; radio plays in an app-wide audio `RadioPlayer` (`lib/data/radio_player.dart`, owned by `AppState.radio`) with a mini player, Now Playing page and, on Android, `RadioService` (media session, foreground service, audio focus, locks; Kotlin in `tool/configure_platforms.py`, Dart bridge `lib/core/media_session.dart`). Favourites page removed (filter pills instead). Unverified on a device. The player dies with the activity (engine), so `MainActivity.onDestroy` stops the service; a headless engine would be needed to survive a swipe from recents. No MPRIS on Linux yet.
 - 0.1.35/0.1.36: tried a side pill gauge on Android, then (owner preference) the desktop `StbValueOsd` panel is used on every platform.
 - 0.1.34: Android libmpv (media-kit/libmpv-android-video-build, default flavor) has the dvbsub decoder but no dvbsub parser, so on Android the muxer sends DVBSUB packets without the 0x20 0x00 header and 0xFF end marker (`TsMuxer(subtitleHeader: !Platform.isAndroid)`). Unverified.
 - 0.1.33: media_kit sets `sub-visibility=no` (libass off), so bitmap subtitles were never drawn: the player now sets it per selected track codec; track names for org/und/etc.; server languages fill in for streams the player has no language for.

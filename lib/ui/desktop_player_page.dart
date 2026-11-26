@@ -184,11 +184,11 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   }
 
   List<Channel> _zapList(AppState state) {
-    final favorites = state.favorites;
+    final favorites = state.tvFavorites;
     if (favorites.length > 1 && favorites.any((c) => c.id == _channel.id)) {
       return favorites;
     }
-    return state.channels;
+    return state.tvChannels;
   }
 
   void _zap(int delta) {
